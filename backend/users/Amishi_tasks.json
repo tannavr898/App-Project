@@ -1,0 +1,12 @@
+[
+  {
+    "id": "27721127",
+    "name": "Study German",
+    "hours": 0.5,
+    "category": "study",
+    "completed": false,
+    "carry_over": true,
+    "date_created": "2026-03-16",
+    "date_completed": null
+  }
+]
