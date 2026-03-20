@@ -1,0 +1,4 @@
+(Go to specified terminal and run commands)
+
+Start the backend: uvicorn api:app --reload
+Start the frontend: npm run dev
