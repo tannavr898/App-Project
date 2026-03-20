@@ -2,3 +2,4 @@
 
 Start the backend: uvicorn api:app --reload
 Start the frontend: npm run dev
+If not working on 5173, run: npx kill-port 5173, then restart and run again
