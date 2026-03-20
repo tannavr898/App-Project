@@ -1,186 +1,127 @@
-# Student Wellness Dashboard
+# Pulse — Student Wellness Dashboard
 
-A modern, interactive dashboard for tracking student wellness metrics and getting AI-powered recommendations.
+A personalized ML-powered wellness app for students. Pulse models how sleep, stress, workload, and habits influence productivity and burnout — and recommends sustainable daily schedules based on your individual patterns.
 
-## Features
-
-✨ **Dashboard Overview**
-- 📈 Real-time burnout and performance charts
-- 📊 Detailed metrics visualization (sleep, stress, fatigue, productivity)
-- 📋 Today's wellness stats at a glance
-- 🔮 Personalized recommendations for tomorrow
-
-📱 **Data Management**
-- ➕ Easy form to log daily metrics
-- 👥 Multi-user support (separate data per student)
-- 📥 Download data as CSV
-- 📋 View raw data in table format
-
-🧠 **AI-Powered Intelligence**
-- ML-based performance prediction
-- Personalized sleep & workload optimization
-- Burnout risk assessment
-- Individual baseline calculation
-
-## Installation
-
-### 1. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Running the Application
-The project now exposes a single entry point, `main.py`, which can operate
-in either a command‑line or web‑based mode.
-
-- **CLI mode** (default):
-  ```bash
-  python main.py --data data/synthetic_high_stress.csv
-  ```
-  This prints user profile, baselines and plots using `matplotlib`.
-
-- **Web UI mode** (Streamlit):
-  ```bash
-  python main.py --ui streamlit
-  ```
-  or equivalently:
-  ```bash
-  streamlit run app.py
-  ```
-  The second form still works because `app.py` now wraps the same UI
-  logic inside a `run_streamlit_app()` function and calls it when run
-  directly. It is imported by `main.py` when `--ui streamlit` is used.
-
-The dashboard will open at `http://localhost:8501` when using Streamlit.
-
-## How to Use
-
-### For First-Time Users
-1. Open the dashboard
-2. Go to **User Management** in the sidebar
-3. Select "Create New User" and enter your name
-4. Click the **"➕ Add New Entry"** tab
-5. Fill in today's metrics:
-   - 😴 Sleep hours
-   - 📚 Study hours
-   - 🏋️ Training hours
-   - 😰 Stress level (0-10)
-   - 😵 Fatigue level (0-10)
-   - 💪 Productivity rating (0-10)
-6. Click **"💾 Save Entry"**
-
-### Viewing Your Dashboard
-1. Go to the **"📈 Dashboard"** tab
-2. View today's metrics in the summary cards
-3. Check burnout and performance trends in the charts
-4. Review tomorrow's personalized recommendation
-
-### Understanding Your Data
-- **Burnout Risk**: Score from 0-100. Lower is better.
-- **Performance Score**: Score from 0-100. Higher is better.
-- **Personal Baselines**: Your historical optimal sleep and workload when you performed best.
-
-## Data Storage
-
-All user data is stored in the `users/` directory as individual CSV files:
-- `users/john_smith.csv` for user "john smith"
-- Each entry is automatically appended when you save new data
-
-## Project Structure
-
-```
-├── app.py                      # Main Streamlit dashboard
-├── main.py                     # Original CLI version
-├── student_data.py             # Data loading & feature engineering
-├── performance_model.py        # ML model for performance prediction
-├── recommendation_engine.py    # Optimization for recommendations
-├── requirements.txt            # Python dependencies
-├── data/                       # Sample synthetic datasets
-│   ├── normal.csv
-│   ├── synthetic_*.csv         # Various scenario simulations
-└── users/                      # User data (created automatically)
-    ├── user1.csv
-    └── user2.csv
-```
-
-## Understanding the Models
-
-### Performance Model
-- Trained on historical data
-- Considers: sleep, stress, fatigue, workload, productivity rating
-- Outputs: 0-100 performance score
-
-### Recommendation Engine
-- Uses randomized search (1500 iterations) to find optimal schedule
-- Factors in:
-  - Personal baselines (optimal sleep & workload)
-  - Current fatigue and stress levels
-  - Burnout risk prediction
-  - Situational context (sleep-deprived? overloaded? etc.)
-- Recommends tomorrow's: sleep hours, study hours, training hours
-- Predicts: performance and burnout for that schedule
-
-## Tips & Best Practices
-
-📝 **Tracking Tips**
-- Log your data at the same time each day for consistency
-- Be honest with self-ratings (stress, fatigue, productivity)
-- Use the recommendations as a guide, not absolute rules
-
-📊 **Data Quality**
-- Need at least 7 days of data for accurate trends
-- More data = better personalization
-- Avoid large gaps in logging
-
-🎯 **Using Recommendations**
-- Follow the suggested schedule for 2-3 days
-- Monitor if it actually improves your performance
-- Adjust manually if needed based on your gut feeling
-
-## Customization
-
-### Change the Input Form
-Edit the form in the **"➕ Add New Entry"** section of `app.py`
-
-### Modify Recommendation Weights
-Edit the scoring function in `recommendation_engine.py` (look for `# ------ FINAL SCORING ------`)
-
-### Add More Metrics
-1. Update the CSV structure in `save_user_data()` function
-2. Add feature engineering in `student_data.py`
-3. Retrain the model
-
-## Troubleshooting
-
-**"No data found for [user]"**
-- This is normal for new users. Add your first entry using the form.
-
-**Model predictions seem off**
-- You need at least 7 days of data for good predictions
-- More data improves personalization
-
-**Charts not showing**
-- Make sure you have at least 2 data points
-- Check that dates are consecutive
-
-## Future Enhancements
-
-🚀 Ideas for expansion:
-- [ ] Mobile app version
-- [ ] Integration with calendar/schedule APIs
-- [ ] Social comparison (anonymized peer benchmarks)
-- [ ] Email notifications for recommendations
-- [ ] Habit tracking for recommendations
-- [ ] Advanced analytics (correlation analysis)
-- [ ] Export reports as PDF
-
-## Support
-
-For issues or questions, check:
-1. The data format in `users/` directory
-2. That all dependencies are installed: `pip list`
-3. Streamlit logs: `streamlit run app.py --logger.level=debug`
+Built by a high school sophomore as a passion project, with the goal of helping students avoid burnout and perform sustainably.
 
 ---
 
-Built with ❤️ using Streamlit, Scikit-learn, and Plotly
+## What it does
+
+**Personalized performance modeling** — a Ridge regression model trained on your own data learns which factors matter most to you specifically. Someone who is sleep-sensitive gets different recommendations than someone who is stress-resistant.
+
+**Burnout estimation** — tracks fatigue, stress, and sleep deficit over rolling 7-day windows to estimate how close you are to burning out before it happens.
+
+**Schedule recommendations** — a Monte Carlo optimizer simulates hundreds of possible tomorrow schedules and finds the one that maximizes performance while keeping burnout low, anchored to your personal historical baselines.
+
+**Task tracking** — add daily tasks by category (study, training, personal), mark them complete, and watch a progress bar fill toward your recommended study goal. Tasks can carry over to the next day if incomplete.
+
+**Log prefill from tasks** — when you log your day, study and training hours are automatically pre-filled from your completed tasks so you're not double-entering data.
+
+**History and streaks** — view your last 14 entries in a color-coded table, track your logging streak, and see weekly completion rates.
+
+---
+
+## Tech stack
+
+**Frontend** — React + Vite, no UI library, custom CSS variables with light/dark mode
+
+**Backend** — FastAPI (Python), served with Uvicorn
+
+**ML pipeline** — scikit-learn (Ridge regression, PolynomialFeatures, StandardScaler), NumPy, Pandas
+
+**Auth** — JWT tokens via python-jose, bcrypt password hashing via passlib
+
+**Storage** — CSV files per user for wellness logs, JSON files for tasks and auth
+
+---
+
+## Project structure
+
+```
+pulse-app/
+├── backend/
+│   ├── api.py                  # FastAPI routes + JWT auth middleware
+│   ├── auth.py                 # Registration, login, token management
+│   ├── student_data.py         # CSV loading + feature engineering
+│   ├── performance_model.py    # Ridge regression model + personalization
+│   ├── recommendation_engine.py # Monte Carlo schedule optimizer
+│   ├── task_manager.py         # Task CRUD + carry-over logic
+│   ├── requirements.txt
+│   └── Procfile                # For Railway deployment
+└── frontend/
+    ├── src/
+    │   ├── App.jsx             # Root component + theme system
+    │   ├── api.js              # Centralized fetch with JWT injection
+    │   ├── index.css
+    │   └── components/
+    │       ├── Dashboard.jsx   # Main overview with interactive chart
+    │       ├── LogEntry.jsx    # Daily wellness logging
+    │       ├── Tasks.jsx       # Task management + weekly stats
+    │       └── UserSelect.jsx  # Login + registration
+    ├── package.json
+    └── vite.config.js
+```
+
+---
+
+## Running locally
+
+**Prerequisites** — Python 3.9+, Node.js 18+
+
+**Backend**
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn api:app --reload
+```
+
+**Frontend** (in a separate terminal)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173` (or `http://localhost:3000` if 5173 is in use).
+
+---
+
+## Environment variables
+
+Create a `.env` file in your `backend/` folder:
+
+```
+PULSE_SECRET=your-long-random-secret-key
+FRONTEND_URL=https://your-frontend.vercel.app
+```
+
+For local development the defaults work fine. For production, generate a real secret key and set `FRONTEND_URL` to your deployed frontend URL.
+
+---
+
+## How the ML works
+
+Each user's data is a time series of daily entries: sleep hours, study hours, training hours, stress (1-10), fatigue (1-10), and productivity (1-10).
+
+`StudentData` computes 7-day rolling averages and a burnout risk score from these raw inputs.
+
+`PerformanceModel` takes the rolling averages, adds polynomial interaction features (e.g. sleep × stress), and fits a Ridge regression model. The trained coefficients reveal which factors most influence *that specific user's* performance — this is the personalization.
+
+`RecommendationEngine` runs 400 Monte Carlo simulations of possible tomorrow schedules, scores each one using the trained model plus heuristics (sleep quality curve, workload curve, situational adjustments for fatigue and stress), and returns the highest-scoring plan. A fixed random seed makes results deterministic.
+
+---
+
+## Planned features
+
+- [ ] Database migration (SQLite → PostgreSQL)
+- [ ] School calendar API integration for automatic assignment tracking
+- [ ] Weekly email summary
+- [ ] AI-powered explanations ("why is my burnout rising?")
+- [ ] Onboarding flow for new users
+
+---
+
+## License
+
+MIT
