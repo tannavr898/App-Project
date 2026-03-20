@@ -1,6 +1,5 @@
+import { apiFetch } from "../api"
 import { useState, useEffect, useRef } from "react"
-
-const API = "http://localhost:8000"
 
 function Sparkline({ data, keyPerf, keyBurnout }) {
   const svgRef = useRef(null)
@@ -175,11 +174,11 @@ export default function Dashboard({ username, onNavigate }) {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    fetch(`${API}/users/${username}/analysis`)
+    apiFetch(`/users/${username}/analysis`)
       .then(r => { if (!r.ok) return r.json().then(e => Promise.reject(e.detail)); return r.json() })
       .then(d => {
         setData(d)
-        return fetch(`${API}/tasks/${username}?recommended_hours=${d.optimal_plan?.study ?? 3.5}`)
+        return apiFetch(`/tasks/${username}?recommended_hours=${d.optimal_plan?.study ?? 3.5}`)
       })
       .then(r => r.json())
       .then(t => { setTasks(t.tasks || []); setProgress(t.progress || null); setLoading(false) })

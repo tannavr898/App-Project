@@ -4,6 +4,7 @@ import LogEntry from "./components/LogEntry"
 import Tasks from "./components/Tasks"
 import UserSelect from "./components/UserSelect"
 import "./index.css"
+import { clearAuth, getSavedUser } from "./api"
 
 const LIGHT = {
   "--bg":        "#f7f7f5",
@@ -58,7 +59,7 @@ const DARK = {
 }
 
 export default function App() {
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState(() => getSavedUser())
   const [page, setPage] = useState("dashboard")
   const [dark, setDark] = useState(() => localStorage.getItem("pulse-theme") === "dark")
 
@@ -110,7 +111,7 @@ export default function App() {
               <div className="avatar">{user.slice(0, 2).toUpperCase()}</div>
               <div className="sidebar-user">
                 <span className="sidebar-username">{user}</span>
-                <button className="switch-btn" onClick={() => setUser(null)}>switch</button>
+                <button className="switch-btn" onClick={() => { clearAuth(); setUser(null) }}>switch</button>
               </div>
               <button className="theme-toggle" onClick={toggleDark}>
                 {dark ? "☀️ Light" : "🌙 Dark"}

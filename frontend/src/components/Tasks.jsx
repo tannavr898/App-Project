@@ -1,6 +1,5 @@
+import { apiFetch } from "../api"
 import { useState, useEffect } from "react"
-
-const API = "http://localhost:8000"
 
 const CATEGORIES = [
   { id: "study",    label: "Study",    color: "var(--green)",  bg: "var(--green-bg)",  txt: "var(--green-txt)" },
@@ -58,22 +57,22 @@ export default function Tasks({ username }) {
   const [freeHours,    setFreeHours]    = useState(null)
 
   const load = () => {
-    fetch(`${API}/tasks/${username}?recommended_hours=${recHours}`)
+    apiFetch(`/tasks/${username}?recommended_hours=${recHours}`)
       .then(r => r.json())
       .then(d => { setTasks(d.tasks || []); setProgress(d.progress || null); setLoading(false) })
       .catch(() => setLoading(false))
   }
 
   useEffect(() => {
-    fetch(`${API}/users/${username}/analysis`)
+    apiFetch(`/users/${username}/analysis`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.optimal_plan?.study) setRecHours(d.optimal_plan.study) })
       .catch(() => {})
-    fetch(`${API}/tasks/${username}/history`)
+    apiFetch(`/tasks/${username}/history`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.history) setHistory(d.history) })
       .catch(() => {})
-    fetch(`${API}/tasks/${username}/prefill`)
+    apiFetch(`/tasks/${username}/prefill`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.free_hours_yesterday != null) setFreeHours(d.free_hours_yesterday) })
       .catch(() => {})
@@ -84,7 +83,7 @@ export default function Tasks({ username }) {
   const addTask = async () => {
     if (!newName.trim() || newHours <= 0) return
     setAdding(true)
-    await fetch(`${API}/tasks`, {
+    await apiFetch(`/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, name: newName.trim(), hours: newHours, carry_over: newCarryOver, category: newCat }),
@@ -95,7 +94,7 @@ export default function Tasks({ username }) {
   }
 
   const toggleComplete = async task => {
-    await fetch(`${API}/tasks/${task.completed ? "uncomplete" : "complete"}`, {
+    await apiFetch(`/tasks/${task.completed ? "uncomplete" : "complete"}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, task_id: task.id }),
     })
@@ -103,12 +102,12 @@ export default function Tasks({ username }) {
   }
 
   const deleteTask = async id => {
-    await fetch(`${API}/tasks/${username}/${id}`, { method: "DELETE" })
+    await apiFetch(`/tasks/${username}/${id}`, { method: "DELETE" })
     load()
   }
 
   const toggleCarryOver = async task => {
-    await fetch(`${API}/tasks/toggle-carry-over`, {
+    await apiFetch(`/tasks/toggle-carry-over`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, task_id: task.id }),
     })

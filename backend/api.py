@@ -1,9 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
 import pandas as pd
 import os
+
+from auth import register_user, authenticate_user, create_token, decode_token
 
 from student_data import StudentData
 from performance_model import PerformanceModel
@@ -25,7 +28,7 @@ app = FastAPI(title="Student Wellness API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000", os.environ.get("FRONTEND_URL", "")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,6 +62,25 @@ class NewTask(BaseModel):
 class TaskAction(BaseModel):
     username: str
     task_id: str
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)) -> str:
+    """FastAPI dependency — extracts and validates the JWT from the Authorization header."""
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    username = decode_token(credentials.credentials)
+    if username is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return username
 
 
 # --------------------------------------------------
@@ -127,8 +149,32 @@ def build_analysis(username: str) -> dict:
 # Routes — users
 # --------------------------------------------------
 
+@app.post("/auth/register")
+def register(req: RegisterRequest):
+    try:
+        user = register_user(req.username, req.password)
+        token = create_token(user["username"])
+        return {"username": user["username"], "token": token}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/auth/login")
+def login(req: LoginRequest):
+    user = authenticate_user(req.username, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    token = create_token(user["username"])
+    return {"username": user["username"], "token": token}
+
+
+@app.get("/auth/me")
+def me(current_user: str = Depends(get_current_user)):
+    return {"username": current_user}
+
+
 @app.get("/users")
-def list_users():
+def list_users(current_user: str = Depends(get_current_user)):
     users = [
         f.replace(".csv", "")
         for f in os.listdir(USERS_DIR)
@@ -138,7 +184,7 @@ def list_users():
 
 
 @app.get("/users/{username}/analysis")
-def get_analysis(username: str):
+def get_analysis(username: str, current_user: str = Depends(get_current_user)):
     if not user_exists(username):
         raise HTTPException(status_code=404, detail="User not found")
     if sum(1 for _ in open(get_user_file(username))) < 3:
@@ -151,7 +197,7 @@ def get_analysis(username: str):
 # --------------------------------------------------
 
 @app.post("/entries")
-def add_entry(entry: NewEntry):
+def add_entry(entry: NewEntry, current_user: str = Depends(get_current_user)):
     user_file = get_user_file(entry.username)
 
     if os.path.exists(user_file):
@@ -180,7 +226,7 @@ def add_entry(entry: NewEntry):
 # --------------------------------------------------
 
 @app.get("/tasks/{username}")
-def get_tasks(username: str, recommended_hours: float = 4.0):
+def get_tasks(username: str, recommended_hours: float = 4.0, current_user: str = Depends(get_current_user)):
     tm = TaskManager(username, USERS_DIR)
     return {
         "tasks": tm.get_todays_tasks(),
@@ -189,14 +235,14 @@ def get_tasks(username: str, recommended_hours: float = 4.0):
 
 
 @app.post("/tasks")
-def add_task(task: NewTask):
+def add_task(task: NewTask, current_user: str = Depends(get_current_user)):
     tm = TaskManager(task.username, USERS_DIR)
     new_task = tm.add_task(task.name, task.hours, task.carry_over, task.category)
     return new_task
 
 
 @app.post("/tasks/complete")
-def complete_task(action: TaskAction):
+def complete_task(action: TaskAction, current_user: str = Depends(get_current_user)):
     tm = TaskManager(action.username, USERS_DIR)
     try:
         updated = tm.complete_task(action.task_id)
@@ -206,7 +252,7 @@ def complete_task(action: TaskAction):
 
 
 @app.post("/tasks/uncomplete")
-def uncomplete_task(action: TaskAction):
+def uncomplete_task(action: TaskAction, current_user: str = Depends(get_current_user)):
     tm = TaskManager(action.username, USERS_DIR)
     try:
         updated = tm.uncomplete_task(action.task_id)
@@ -216,7 +262,7 @@ def uncomplete_task(action: TaskAction):
 
 
 @app.delete("/tasks/{username}/{task_id}")
-def delete_task(username: str, task_id: str):
+def delete_task(username: str, task_id: str, current_user: str = Depends(get_current_user)):
     tm = TaskManager(username, USERS_DIR)
     try:
         tm.delete_task(task_id)
@@ -226,7 +272,7 @@ def delete_task(username: str, task_id: str):
 
 
 @app.post("/tasks/toggle-carry-over")
-def toggle_carry_over(action: TaskAction):
+def toggle_carry_over(action: TaskAction, current_user: str = Depends(get_current_user)):
     tm = TaskManager(action.username, USERS_DIR)
     try:
         updated = tm.toggle_carry_over(action.task_id)
@@ -236,7 +282,7 @@ def toggle_carry_over(action: TaskAction):
 
 
 @app.get("/users/{username}/entries")
-def get_entries(username: str):
+def get_entries(username: str, current_user: str = Depends(get_current_user)):
     if not user_exists(username):
         raise HTTPException(status_code=404, detail="User not found")
     df = pd.read_csv(get_user_file(username))
@@ -245,13 +291,13 @@ def get_entries(username: str):
 
 
 @app.get("/tasks/{username}/history")
-def get_task_history(username: str):
+def get_task_history(username: str, current_user: str = Depends(get_current_user)):
     tm = TaskManager(username, USERS_DIR)
     return {"history": tm.get_completion_history()}
 
 
 @app.get("/tasks/{username}/prefill")
-def get_prefill(username: str):
+def get_prefill(username: str, current_user: str = Depends(get_current_user)):
     """
     Returns today's completed task hours by category so the log entry
     form can pre-fill study and training hours automatically.

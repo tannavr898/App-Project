@@ -1,6 +1,5 @@
+import { apiFetch } from "../api"
 import { useState, useEffect } from "react"
-
-const API = "http://localhost:8000"
 
 function HourCard({ label, value, onChange, max = 16, step = 0.5, color = "var(--blue)" }) {
   const dec = () => onChange(Math.max(0, Math.round((value - step) * 10) / 10))
@@ -131,11 +130,11 @@ export default function LogEntry({ username, onSaved }) {
   const [prefill, setPrefill] = useState(null)
 
   useEffect(() => {
-    fetch(`${API}/users/${username}/entries`)
+    apiFetch(`/users/${username}/entries`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.entries) setEntries(d.entries) })
       .catch(() => {})
-    fetch(`${API}/tasks/${username}/prefill`)
+    apiFetch(`/tasks/${username}/prefill`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d) {
@@ -153,7 +152,7 @@ export default function LogEntry({ username, onSaved }) {
   const handleSubmit = async () => {
     setSaving(true); setError(null)
     try {
-      const res = await fetch(`${API}/entries`, {
+      const res = await apiFetch(`/entries`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, date, sleep_hours: sleep, study_hours: study, training_hours: training, stress, fatigue, productivity: prod }),
