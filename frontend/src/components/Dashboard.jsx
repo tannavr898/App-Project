@@ -165,11 +165,12 @@ function badgeClass(metric, value) {
 }
 
 export default function Dashboard({ username, onNavigate }) {
-  const [data,     setData]     = useState(null)
-  const [tasks,    setTasks]    = useState([])
-  const [progress, setProgress] = useState(null)
-  const [loading,  setLoading]  = useState(true)
-  const [error,    setError]    = useState(null)
+  const [data,          setData]          = useState(null)
+  const [tasks,         setTasks]         = useState([])
+  const [progress,      setProgress]      = useState(null)
+  const [loading,       setLoading]       = useState(true)
+  const [error,         setError]         = useState(null)
+  const [selectedMode,  setSelectedMode]  = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -178,7 +179,7 @@ export default function Dashboard({ username, onNavigate }) {
       .then(r => { if (!r.ok) return r.json().then(e => Promise.reject(e.detail)); return r.json() })
       .then(d => {
         setData(d)
-        return apiFetch(`/tasks/${username}?recommended_hours=${d.optimal_plan?.study ?? 3.5}`)
+        return apiFetch(`/tasks/${username}?recommended_hours=${d.activePlan?.study ?? 3.5}`)
       })
       .then(r => r.json())
       .then(t => { setTasks(t.tasks || []); setProgress(t.progress || null); setLoading(false) })
@@ -193,18 +194,14 @@ export default function Dashboard({ username, onNavigate }) {
     </div>
   )
 
-  const { latest, baselines, optimal_plan, chart_data, profile } = data
+  const { latest, baselines, optimal_plan, chart_data, profile, plans, recommended_mode } = data
+  const activeMode = selectedMode || recommended_mode || 'comfortable'
+  const activePlan = plans?.[activeMode] || optimal_plan
   const hour     = new Date().getHours()
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
   const today    = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
   const pct      = progress?.progress_pct ?? 0
   const barColor = pct >= 100 ? "var(--green)" : pct >= 50 ? "var(--blue)" : "var(--amber)"
-
-  const recItems = optimal_plan ? [
-    { label: "Sleep",    value: optimal_plan.sleep,    color: "var(--blue)",   max: 12, icon: "😴", desc: "hours of sleep" },
-    { label: "Study",    value: optimal_plan.study,    color: "var(--green)",  max: 8,  icon: "📚", desc: "hours of study" },
-    { label: "Training", value: optimal_plan.training, color: "var(--purple)", max: 4,  icon: "🏋️", desc: "hours of training" },
-  ] : []
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, height: "100%" }}>
@@ -248,46 +245,71 @@ export default function Dashboard({ username, onNavigate }) {
           </div>
         </div>
 
-        {/* Recommendation */}
-        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "1.25rem", display: "flex", flexDirection: "column", gap: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)", marginBottom: "1rem" }}>Tomorrow's recommendation</div>
-          {optimal_plan ? (
-            <>
-              {/* Three big rec items */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
-                {recItems.map(r => (
-                  <div key={r.label} style={{ flex: 1, background: "var(--bg)", borderRadius: "var(--radius-md)", padding: "14px 16px", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 8 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 16 }}>{r.icon}</span>
-                        <span style={{ fontSize: 12, color: "var(--muted)" }}>{r.label}</span>
+        {/* Three mode recommendation cards */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}>Tomorrow's plan</div>
+          {plans && Object.keys(plans).filter(k => k !== 'recommended').length > 0 ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 8 }}>
+              {['recovery','comfortable','challenge'].map(modeKey => {
+                const plan = plans[modeKey]
+                if (!plan) return null
+                const isActive    = activeMode === modeKey
+                const isRecommended = recommended_mode === modeKey
+                const modeColors  = {
+                  recovery:    { accent: "var(--blue)",   perfBg: "var(--green-bg)", perfTxt: "var(--green-txt)", burnBg: "var(--green-bg)", burnTxt: "var(--green-txt)" },
+                  comfortable: { accent: "var(--green)",  perfBg: "var(--green-bg)", perfTxt: "var(--green-txt)", burnBg: "var(--amber-bg)", burnTxt: "var(--amber-txt)" },
+                  challenge:   { accent: "var(--purple)", perfBg: "var(--green-bg)", perfTxt: "var(--green-txt)", burnBg: "var(--red-bg)",   burnTxt: "var(--red-txt)" },
+                }
+                const mc = modeColors[modeKey]
+                return (
+                  <div key={modeKey} style={{
+                    background: "var(--surface)",
+                    border: isActive ? `2px solid ${mc.accent}` : "1px solid var(--border)",
+                    borderRadius: "var(--radius-lg)",
+                    padding: "14px",
+                    display: "flex", flexDirection: "column", gap: 10,
+                    cursor: "pointer", transition: "border-color 0.15s",
+                    position: "relative",
+                  }} onClick={() => setSelectedMode(modeKey)}>
+                    {isRecommended && (
+                      <div style={{ position: "absolute", top: -9, left: "50%", transform: "translateX(-50%)", background: mc.accent, color: "white", fontSize: 9, padding: "2px 8px", borderRadius: 99, whiteSpace: "nowrap", fontWeight: 500 }}>
+                        recommended
                       </div>
-                      <span style={{ fontSize: 26, fontWeight: 500, color: "var(--text)", lineHeight: 1 }}>
-                        {r.value}<span style={{ fontSize: 12, color: "var(--faint)", fontWeight: 400 }}>h</span>
-                      </span>
+                    )}
+                    <div>
+                      <div style={{ fontSize: 10, color: "var(--faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{plan.mode}</div>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text)" }}>{plan.description}</div>
+                      <div style={{ fontSize: 10, color: "var(--faint)", marginTop: 1 }}>{plan.context}</div>
                     </div>
-                    <div style={{ height: 4, background: "var(--border)", borderRadius: 99, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${(r.value / r.max) * 100}%`, background: r.color, borderRadius: 99 }} />
+                    {[
+                      { label: "Sleep",    val: plan.sleep,    color: "var(--blue)",   max: 12 },
+                      { label: "Study",    val: plan.study,    color: "var(--green)",  max: 8  },
+                      { label: "Training", val: plan.training, color: "var(--purple)", max: 4  },
+                    ].map(r => (
+                      <div key={r.label}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted)", marginBottom: 3 }}>
+                          <span>{r.label}</span>
+                          <span style={{ fontWeight: 500, color: "var(--text)" }}>{r.val}h</span>
+                        </div>
+                        <div style={{ height: 3, background: "var(--border)", borderRadius: 99, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${(r.val/r.max)*100}%`, background: r.color, borderRadius: 99 }} />
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
+                      <div style={{ background: mc.perfBg, borderRadius: "var(--radius-sm)", padding: "6px", textAlign: "center" }}>
+                        <div style={{ fontSize: 8, color: mc.perfTxt, marginBottom: 1 }}>performance</div>
+                        <div style={{ fontSize: 16, fontWeight: 500, color: mc.perfTxt }}>{plan.pred_perf}</div>
+                      </div>
+                      <div style={{ background: mc.burnBg, borderRadius: "var(--radius-sm)", padding: "6px", textAlign: "center" }}>
+                        <div style={{ fontSize: 8, color: mc.burnTxt, marginBottom: 1 }}>burnout</div>
+                        <div style={{ fontSize: 16, fontWeight: 500, color: mc.burnTxt }}>{plan.pred_burnout}</div>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 10, color: "var(--faint)" }}>{r.desc} recommended</div>
                   </div>
-                ))}
-              </div>
-
-              {/* Predicted outcomes */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-                <div style={{ background: "var(--green-bg)", borderRadius: "var(--radius-md)", padding: "12px 14px", textAlign: "center" }}>
-                  <div style={{ fontSize: 10, color: "var(--green-txt)", marginBottom: 3 }}>predicted performance</div>
-                  <div style={{ fontSize: 26, fontWeight: 500, color: "var(--green-txt)", lineHeight: 1 }}>{optimal_plan.pred_perf}</div>
-                  <div style={{ fontSize: 10, color: "var(--green-txt)", opacity: 0.7, marginTop: 2 }}>out of 100</div>
-                </div>
-                <div style={{ background: "var(--red-bg)", borderRadius: "var(--radius-md)", padding: "12px 14px", textAlign: "center" }}>
-                  <div style={{ fontSize: 10, color: "var(--red-txt)", marginBottom: 3 }}>predicted burnout</div>
-                  <div style={{ fontSize: 26, fontWeight: 500, color: "var(--red-txt)", lineHeight: 1 }}>{optimal_plan.pred_burnout}</div>
-                  <div style={{ fontSize: 10, color: "var(--red-txt)", opacity: 0.7, marginTop: 2 }}>out of 100</div>
-                </div>
-              </div>
-            </>
+                )
+              })}
+            </div>
           ) : (
             <p style={{ fontSize: 12, color: "var(--faint)" }}>Log more entries to unlock recommendations.</p>
           )}

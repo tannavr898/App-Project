@@ -111,6 +111,8 @@ def build_analysis(username: str) -> dict:
     baselines = perf_model.get_baselines(df)
     profile = perf_model.get_user_profile() if perf_model.trained else {}
 
+    plans = {}
+    
     optimal_plan = None
     if perf_model.trained:
         engine = RecommendationEngine(perf_model)
@@ -138,6 +140,8 @@ def build_analysis(username: str) -> dict:
         "baselines": {k: round(float(v), 2) for k, v in baselines.items()},
         "profile": {k: round(float(v), 4) for k, v in profile.items()},
         "optimal_plan": optimal_plan,
+        "plans": plans,
+        "recommended_mode": plans.get('recommended', 'comfortable'),
         "chart_data": chart_data.to_dict(orient="records"),
         "total_entries": len(df),
     }
