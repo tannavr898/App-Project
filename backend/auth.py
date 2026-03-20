@@ -56,18 +56,34 @@ def register_user(username: str, password: str) -> dict:
     return {"username": username}
 
 
+DEV_USERNAME = "dev"
+DEV_PASSWORD = "pulse_dev_2026"
+
+
+def is_dev_account(username: str) -> bool:
+    return username.strip().lower() == DEV_USERNAME
+
+
 def authenticate_user(username: str, password: str) -> Optional[dict]:
     """
     Verify credentials. Returns the user dict on success, None on failure.
+    The dev account bypasses normal registration — it always exists.
     """
     username = username.strip().lower()
+
+    # Dev account — hardcoded credentials, never stored
+    if username == DEV_USERNAME:
+        if password == DEV_PASSWORD:
+            return {"username": DEV_USERNAME, "is_dev": True}
+        return None
+
     auth = _load_auth()
     user = auth.get(username)
     if not user:
         return None
     if not pwd_context.verify(password, user["password_hash"]):
         return None
-    return {"username": username}
+    return {"username": username, "is_dev": False}
 
 
 def create_token(username: str) -> str:
