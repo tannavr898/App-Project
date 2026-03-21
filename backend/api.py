@@ -39,7 +39,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:3000",
-        os.environ.get("FRONTEND_URL", ""),
+        os.environ.get("FRONTEND_URL", "https://app-project-uk97.vercel.app"),
     ],
     allow_credentials=True,
     allow_methods=["*"],
