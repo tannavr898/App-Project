@@ -196,7 +196,7 @@ def me(current_user: str = Depends(get_current_user)):
 # --------------------------------------------------
 def _seed_dev_data():
     """Generate 30 days of realistic sample data for the dev account."""
-    np.random.seed(99)
+    np.random.seed(int(pd.Timestamp.now().timestamp()))
     dates      = pd.date_range(end=pd.Timestamp.today(), periods=30, freq="D")
     sleep      = np.clip(np.random.normal(7.5, 0.8, 30), 5.5, 10.0)
     study      = np.clip(np.random.normal(3.5, 1.0, 30), 0.5, 7.0)

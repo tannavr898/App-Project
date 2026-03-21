@@ -7,8 +7,8 @@ MODE_CONFIGS = {
         "label":        "Recovery",
         "description":  "Rest and recharge",
         "context":      "for after a tough stretch",
-        "sleep_min":    8.5,
-        "sleep_max":    10.5,
+        "sleep_min":    None,   # computed from baseline (+0.5 to +2.5)
+        "sleep_max":    None,
         "study_min":    0.5,
         "study_max":    2.0,
         "train_min":    0.0,
@@ -160,15 +160,20 @@ class RecommendationEngine:
         base_fatigue = baselines.get('baseline_fatigue', avg_fatigue)
         base_stress  = baselines.get('baseline_stress',  avg_stress)
 
-        # Sleep range — comfortable and challenge are anchored to personal baseline
-        # so we never cut below what the person's own data says works for them.
-        sleep_min = cfg['sleep_min'] if cfg['sleep_min'] is not None else max(7.0, base_sleep - 0.5)
-        sleep_max = cfg['sleep_max'] if cfg['sleep_max'] is not None else base_sleep + 1.0
-
-        # Challenge never cuts sleep below baseline
-        if cfg['label'] == "Challenge":
-            sleep_min = max(sleep_min, base_sleep)
+        # Sleep ranges are ALL relative to the personal baseline so modes
+        # are always ordered: recovery >= comfortable >= challenge for sleep.
+        if cfg['label'] == "Recovery":
+            # Push well above baseline — user needs extra rest
+            sleep_min = base_sleep + 0.5
+            sleep_max = base_sleep + 2.5
+        elif cfg['label'] == "Comfortable":
+            # Centered on baseline with small headroom
+            sleep_min = max(7.0, base_sleep - 0.25)
             sleep_max = base_sleep + 0.75
+        else:
+            # Challenge — protect baseline, small upward range only
+            sleep_min = max(7.0, base_sleep - 0.25)
+            sleep_max = base_sleep + 0.5
 
         w_perf       = cfg['w_perf']
         w_load       = cfg['w_load']
