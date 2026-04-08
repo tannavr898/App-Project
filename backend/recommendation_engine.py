@@ -76,37 +76,92 @@ class RecommendationEngine:
         window = min(6, len(df))
         recent = df.tail(window)
 
+        current_avg_stress = recent['avg_stress_7'].iloc[-1]
+        current_avg_fatigue = recent['avg_fatigue_7'].iloc[-1]
+        current_avg_prod = recent['avg_productivity_7'].iloc[-1] if 'avg_productivity_7' in recent else recent['productivity'].iloc[-1]
+        current_avg_load = recent['avg_load'].iloc[-1] if 'avg_load' in recent else (
+            recent['avg_study_7'].iloc[-1] + recent['avg_training_7'].iloc[-1]
+        )
+
+        baselines = self.model.get_baselines(df)
+        base_sleep = baselines.get('optimal_sleep', 8.25)
+        base_load = baselines.get('optimal_load', 4.0)
+        base_stress = baselines.get('baseline_stress', current_avg_stress)
+        base_fatigue = baselines.get('baseline_fatigue', current_avg_fatigue)
+
         new_avg_sleep    = (recent['sleep_hours'].sum()    + sleep_new)    / (window + 1)
         new_avg_study    = (recent['study_hours'].sum()    + study_new)    / (window + 1)
         new_avg_training = (recent['training_hours'].sum() + training_new) / (window + 1)
+        new_load        = new_avg_study + new_avg_training
+
+        predicted_stress = self.predict_tomorrow_stress(
+            current_avg_stress, current_avg_load, sleep_new, new_load,
+            base_stress, base_load
+        )
+        predicted_fatigue = self.predict_tomorrow_fatigue(
+            current_avg_fatigue, current_avg_load, sleep_new, new_load,
+            base_fatigue, base_load
+        )
 
         if productivity_new is None:
-            new_avg_prod = recent.get(
-                'avg_productivity_7', recent['productivity']
-            ).iloc[-1]
-        else:
-            new_avg_prod = (
-                recent.get('productivity', pd.Series()).sum() + productivity_new
-            ) / (window + 1)
+            productivity_new = self.predict_tomorrow_productivity(
+                current_avg_prod, sleep_new, new_load,
+                predicted_stress, predicted_fatigue,
+                base_sleep, base_load
+            )
+
+        new_avg_prod = (
+            recent['avg_productivity_7'].sum() + productivity_new
+        ) / (window + 1)
 
         return {
-            'avg_sleep_7':      new_avg_sleep,
-            'avg_stress_7':     recent['avg_stress_7'].iloc[-1],
-            'avg_fatigue_7':    recent['avg_fatigue_7'].iloc[-1],
-            'avg_load':         new_avg_study + new_avg_training,
-            'avg_study':        new_avg_study,
-            'avg_training':     new_avg_training,
+            'avg_sleep_7':       new_avg_sleep,
+            'avg_stress_7':      (recent['avg_stress_7'].sum() + predicted_stress) / (window + 1),
+            'avg_fatigue_7':     (recent['avg_fatigue_7'].sum() + predicted_fatigue) / (window + 1),
+            'avg_load':          new_load,
+            'avg_study':         new_avg_study,
+            'avg_training':      new_avg_training,
             'avg_productivity_7': new_avg_prod,
         }
+
+    def predict_tomorrow_stress(self, current_avg_stress, current_avg_load, sleep, load,
+                                base_stress, base_load):
+        stress = current_avg_stress
+        stress += (load - current_avg_load) * 0.35
+        stress -= (sleep - 8.0) * 0.24
+        stress += max(0.0, load - base_load) * 0.2
+        stress += (current_avg_load - base_load) * 0.1
+        return float(np.clip(stress, 1.0, 10.0))
+
+    def predict_tomorrow_fatigue(self, current_avg_fatigue, current_avg_load, sleep, load,
+                                 base_fatigue, base_load):
+        fatigue = current_avg_fatigue
+        fatigue += (load - current_avg_load) * 0.38
+        fatigue -= (sleep - 8.0) * 0.28
+        fatigue += max(0.0, load - base_load) * 0.15
+        fatigue += (current_avg_load - base_load) * 0.08
+        return float(np.clip(fatigue, 1.0, 10.0))
+
+    def predict_tomorrow_productivity(self, current_avg_prod, sleep, load,
+                                      predicted_stress, predicted_fatigue,
+                                      base_sleep, base_load):
+        prod = current_avg_prod
+        prod += (sleep - 8.0) * 0.18
+        prod -= max(0.0, load - 5.0) * 0.16
+        prod -= (predicted_stress - 5.0) * 0.08
+        prod -= (predicted_fatigue - 5.0) * 0.08
+        prod += max(0.0, base_sleep - sleep) * 0.04
+        return float(np.clip(prod, 1.0, 10.0))
 
     # --------------------------------------------------
     # Burnout estimate
     # --------------------------------------------------
     def estimate_burnout(self, features):
         burnout = (
-            0.35 * (features['avg_fatigue_7'] / 10) +
-            0.35 * (features['avg_stress_7']  / 10) +
-            0.30 * max(0, 8 - features['avg_sleep_7']) / 4
+            0.28 * (features['avg_fatigue_7'] / 10) +
+            0.28 * (features['avg_stress_7']  / 10) +
+            0.24 * max(0, 8 - features['avg_sleep_7']) / 4 +
+            0.20 * max(0, features['avg_load'] - 4.5) / 5
         ) * 100
         return np.clip(burnout, 0, 100)
 
@@ -125,8 +180,13 @@ class RecommendationEngine:
     # --------------------------------------------------
     # Adaptive workload curve
     # --------------------------------------------------
-    def workload_score(self, load, avg_study, avg_training, baseline_optimal=None):
+    def workload_score(self, load, avg_study, avg_training, baseline_optimal=None, mode="comfortable"):
         optimal_load = baseline_optimal if baseline_optimal is not None else 4
+        if mode == "Challenge":
+            optimal_load += 1.5
+        elif mode == "Recovery":
+            optimal_load = max(0.5, optimal_load - 1.5)
+
         if avg_study < 1.5:
             optimal_load += 1
         elif avg_study > 4:
@@ -189,8 +249,10 @@ class RecommendationEngine:
             if sleep + study + training + fixed_commitments_hours > 24:
                 continue
 
-            # Recovery: don't require minimum load
             if cfg['label'] != "Recovery" and study + training < 1.5:
+                continue
+
+            if cfg['label'] == "Challenge" and study + training < max(base_load + 1.0, avg_load + 1.0):
                 continue
 
             features      = self.simulate_next_day(df, sleep, study, training)
@@ -199,7 +261,7 @@ class RecommendationEngine:
 
             s_sleep = self.sleep_score(sleep, avg_sleep, base_sleep)
             s_load  = self.workload_score(
-                study + training, avg_study, avg_training, base_load
+                study + training, avg_study, avg_training, base_load, cfg['label']
             )
 
             score = (
@@ -211,9 +273,15 @@ class RecommendationEngine:
             score += training     * train_bonus
 
             # Stay near baselines (scaled by mode — challenge allows more drift)
-            baseline_pull = 1.0 if cfg['label'] == "Challenge" else 2.0
+            baseline_pull = 0.6 if cfg['label'] == "Challenge" else 2.2
             score -= abs(sleep - base_sleep)          * baseline_pull
             score -= abs((study + training) - base_load) * (baseline_pull * 0.75)
+
+            if cfg['label'] == "Challenge":
+                score += max(0, (study + training) - base_load) * 2.5
+            elif cfg['label'] == "Recovery":
+                score -= max(0, (study + training) - base_load) * 4
+                score += max(0, base_sleep - sleep) * 4
 
             # Situational adjustments (same logic, consistent across all modes)
             if avg_sleep < 6.5:
