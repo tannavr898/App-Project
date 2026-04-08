@@ -58,7 +58,18 @@ function urlBase64ToUint8Array(base64String) {
 
 export async function registerPushSubscription(username) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
-    throw new Error('Push notifications are not supported by this browser.')
+    throw new Error('Push reminders are not supported by this browser. Use Chrome or Edge on Android, or Safari 16.4+ on iOS.')
+  }
+
+  if (Notification.permission === 'denied') {
+    throw new Error('Browser notifications are blocked. Enable them in your browser settings and refresh the page.')
+  }
+
+  if (Notification.permission === 'default') {
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') {
+      throw new Error('Please allow browser notifications to enable reminders.')
+    }
   }
 
   const keyRes = await apiFetch('/push/vapid_public_key')

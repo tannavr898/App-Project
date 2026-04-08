@@ -236,9 +236,12 @@ export default function Dashboard({ username, onNavigate }) {
   const [pushLoading,  setPushLoading]  = useState(false)
 
   useEffect(() => {
-    if (typeof Notification !== "undefined") {
-      setPushStatus(Notification.permission)
+    if (typeof window === "undefined") return
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
+      setPushStatus("unsupported")
+      return
     }
+    setPushStatus(Notification.permission)
   }, [])
 
   const enablePush = async () => {
@@ -319,20 +322,28 @@ export default function Dashboard({ username, onNavigate }) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       {/* Header */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+      <div style={{display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
         <div>
           <h1 style={{fontSize:16,fontWeight:500,color:"var(--text)"}}>{greeting}, {username}</h1>
           <p style={{fontSize:12,color:"var(--faint)",marginTop:2}}>Here's how you're doing</p>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <span style={{fontSize:12,color:"var(--faint)",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"5px 10px"}}>{today}</span>
-          {pushStatus !== "granted" ? (
-            <button onClick={enablePush} disabled={pushLoading}
-              style={{fontSize:11,padding:"6px 12px",borderRadius:"999px",border:"1px solid var(--border)",background:pushLoading?"var(--border)":"var(--text)",color:"var(--bg)",cursor:pushLoading?"not-allowed":"pointer",fontFamily:"inherit"}}>
-              {pushLoading ? "Enabling…" : "Enable reminders"}
-            </button>
-          ) : (
+          {pushStatus === "granted" ? (
             <span style={{fontSize:11,color:"var(--green-txt)",background:"var(--green-bg)",borderRadius:"999px",padding:"6px 10px"}}>Reminders enabled</span>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+              <button onClick={enablePush} disabled={pushLoading || pushStatus === "unsupported"}
+                style={{fontSize:11,padding:"6px 12px",borderRadius:"999px",border:"1px solid var(--border)",background:pushLoading?"var(--border)":"var(--text)",color:"var(--bg)",cursor:pushLoading||pushStatus==="unsupported"?"not-allowed":"pointer",fontFamily:"inherit"}}>
+                {pushLoading ? "Enabling…" : "Enable reminders"}
+              </button>
+              {pushStatus === "unsupported" && (
+                <span style={{fontSize:10,color:"var(--faint)",textAlign:"right",maxWidth:220}}>Push reminders are not supported by this browser.</span>
+              )}
+              {pushStatus === "denied" && (
+                <span style={{fontSize:10,color:"var(--red-txt)",textAlign:"right",maxWidth:220}}>Notifications are blocked. Please enable them in your browser settings.</span>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -379,7 +390,7 @@ export default function Dashboard({ username, onNavigate }) {
       </div>
 
       {/* Plans + stats side by side */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,alignItems:"start"}}>
+      <div className="responsive-grid">
 
         {/* LEFT — stats */}
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
