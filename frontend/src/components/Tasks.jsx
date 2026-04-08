@@ -32,13 +32,15 @@ function CircleProgress({ pct, size = 80, stroke = 7 }) {
 function WeeklyBar({ date, rate }) {
   const d = new Date(date)
   const day = d.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 1)
-  const color = rate === 1 ? "var(--green)" : rate > 0.5 ? "var(--blue)" : rate > 0 ? "var(--amber)" : "var(--border)"
+  const today = new Date().toLocaleDateString("en-CA")
+  const isToday = date === today
+  const color = rate >= 0.9 ? "var(--green)" : rate >= 0.5 ? "var(--blue)" : rate > 0 ? "var(--amber)" : "var(--border)"
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-      <div style={{ width: 24, height: 48, background: "var(--border)", borderRadius: 99, overflow: "hidden", display: "flex", alignItems: "flex-end" }}>
+      <div style={{ width: 24, height: 48, background: "var(--border)", borderRadius: 99, overflow: "hidden", display: "flex", alignItems: "flex-end", border: isToday ? `2px solid ${color}` : "none", boxSizing: "border-box" }}>
         <div style={{ width: "100%", height: `${Math.max(4, rate * 100)}%`, background: color, borderRadius: 99, transition: "height 0.6s ease" }} />
       </div>
-      <span style={{ fontSize: 9, color: "var(--faint)" }}>{day}</span>
+      <span style={{ fontSize: 9, color: "var(--faint)", fontWeight: isToday ? 500 : 400 }}>{day}</span>
     </div>
   )
 }
@@ -124,11 +126,29 @@ export default function Tasks({ username }) {
   const pending    = tasks.filter(t => !t.completed)
   const totalHours = tasks.reduce((s, t) => s + t.hours, 0)
 
-  // build last 7 days for weekly chart
+  // Calculate completion streak
+  let streak = 0
+  const today = getLocalDate(new Date())
+  const historyEntries = Object.entries(history).sort((a, b) => new Date(b[0]) - new Date(a[0]))
+  for (const [date, rate] of historyEntries) {
+    if (rate >= 0.9) {
+      const daysDiff = Math.floor((new Date(today) - new Date(date)) / (1000 * 60 * 60 * 24))
+      if (daysDiff === streak) {
+        streak++
+      } else {
+        break
+      }
+    } else {
+      break
+    }
+  }
+
+  // build last 7 days for weekly chart (today shows current progress, not finalized history)
   const last7 = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() - (6 - i))
     const key = getLocalDate(d)
-    return { date: key, rate: history[key] ?? 0 }
+    const rate = history[key] ?? 0
+    return { date: key, rate }
   })
 
   const filtered = filter === "all" ? tasks
@@ -304,6 +324,15 @@ export default function Tasks({ username }) {
             ))}
           </div>
 
+          {/* Streak */}
+          {streak > 0 && (
+            <div style={{ background: "var(--green-bg)", border: "1px solid var(--green-txt)", borderRadius: "var(--radius-lg)", padding: "1.25rem", textAlign: "center" }}>
+              <div style={{ fontSize: 12, color: "var(--green-txt)", marginBottom: 4 }}>🔥 Streak</div>
+              <div style={{ fontSize: 28, fontWeight: 500, color: "var(--green-txt)", lineHeight: 1 }}>{streak}</div>
+              <div style={{ fontSize: 11, color: "var(--green-txt)", marginTop: 4, opacity: 0.85 }}>day{streak !== 1 ? "s" : ""} in a row</div>
+            </div>
+          )}
+
           {/* Category breakdown */}
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "1.25rem" }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)", marginBottom: "1rem" }}>By category</div>
@@ -334,7 +363,10 @@ export default function Tasks({ username }) {
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "1.25rem" }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)", marginBottom: "1rem" }}>Weekly completion</div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: "0 4px" }}>
-              {last7.map(d => <WeeklyBar key={d.date} date={d.date} rate={d.rate} />)}
+              {last7.map((d, i) => {
+                const rate = i === 6 && pct > 0 ? Math.min(pct / 100, progress?.progress_pct / 100 || 0) : d.rate
+                return <WeeklyBar key={d.date} date={d.date} rate={rate} />
+              })}
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 10, color: "var(--faint)" }}>
               <span>7 days ago</span>

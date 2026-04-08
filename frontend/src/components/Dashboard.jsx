@@ -231,7 +231,7 @@ export default function Dashboard({ username, onNavigate }) {
   const [progress,     setProgress]     = useState(null)
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState(null)
-  const [selectedMode, setSelectedMode] = useState(null)
+  const [selectedMode, setSelectedMode] = useState(() => localStorage.getItem(`pulse-plan-${username}`))
   const [pushStatus,   setPushStatus]   = useState("default")
   const [pushLoading,  setPushLoading]  = useState(false)
 
@@ -281,7 +281,13 @@ export default function Dashboard({ username, onNavigate }) {
       .then(r => r.json())
       .then(t => { setTasks(t.tasks||[]); setProgress(t.progress||null) })
       .catch(() => {})
-  }, [selectedMode, data])
+  }, [selectedMode, data, username])
+
+  // Save selected mode to localStorage when it changes
+  const handleModeSelect = (mode) => {
+    localStorage.setItem(`pulse-plan-${username}`, mode)
+    setSelectedMode(mode)
+  }
 
   if (loading) return <div className="loading">Loading your data…</div>
   if (error) return (
