@@ -4,7 +4,7 @@ pandas
 scikit-learn
 numpy
 passlib[bcrypt]
-bycrypt==3.2.2
+bcrypt==3.2.2
 python-jose[cryptography]
 python-multipart
 pywebpush
