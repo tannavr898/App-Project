@@ -1,6 +1,8 @@
 import { apiFetch } from "../api"
 import { useState, useEffect } from "react"
 
+const getLocalDate = date => new Date(date).toLocaleDateString("en-CA")
+
 function HourCard({ label, value, onChange, max = 16, step = 0.5, color = "var(--blue)" }) {
   const dec = () => onChange(Math.max(0, Math.round((value - step) * 10) / 10))
   const inc = () => onChange(Math.min(max, Math.round((value + step) * 10) / 10))
@@ -58,7 +60,7 @@ function StreakBadge({ entries }) {
   for (let i = 0; i < 60; i++) {
     const d = new Date(today)
     d.setDate(today.getDate() - i)
-    const ds = d.toISOString().split("T")[0]
+    const ds = getLocalDate(d)
     if (entries.find(e => e.date?.slice(0, 10) === ds)) streak++
     else if (i > 0) break
   }
@@ -112,7 +114,7 @@ function HistoryTable({ entries }) {
 }
 
 export default function LogEntry({ username, onSaved }) {
-  const today = new Date().toISOString().split("T")[0]
+  const today = getLocalDate(new Date())
 
   const [tab,      setTab]      = useState("log")
   const [date,     setDate]     = useState(today)

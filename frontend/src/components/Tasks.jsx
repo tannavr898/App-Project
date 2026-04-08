@@ -1,6 +1,8 @@
 import { apiFetch } from "../api"
 import { useState, useEffect } from "react"
 
+const getLocalDate = date => new Date(date).toLocaleDateString("en-CA")
+
 const CATEGORIES = [
   { id: "study",    label: "Study",    color: "var(--green)",  bg: "var(--green-bg)",  txt: "var(--green-txt)" },
   { id: "training", label: "Training", color: "var(--purple)", bg: "#EEEDFE",          txt: "#534AB7" },
@@ -125,7 +127,7 @@ export default function Tasks({ username }) {
   // build last 7 days for weekly chart
   const last7 = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() - (6 - i))
-    const key = d.toISOString().split("T")[0]
+    const key = getLocalDate(d)
     return { date: key, rate: history[key] ?? 0 }
   })
 
