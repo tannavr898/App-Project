@@ -145,7 +145,7 @@ export default function Tasks({ username }) {
 
   // build last 7 days for weekly chart (today shows current progress, not finalized history)
   const last7 = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i))
+    const d = new Date(); d.setDate(new Date().getDate() - 6 + i)
     const key = getLocalDate(d)
     const rate = history[key] ?? 0
     return { date: key, rate }

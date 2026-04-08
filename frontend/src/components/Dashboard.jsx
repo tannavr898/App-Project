@@ -473,7 +473,7 @@ export default function Dashboard({ username, onNavigate }) {
           {plans&&Object.keys(plans).filter(k=>k!=="recommended").length>0?(
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {["recovery","comfortable","challenge"].map(mk=>(
-                <ModeCard key={mk} plan={plans[mk]} isActive={activeMode===mk} isRecommended={recommended_mode===mk} accent={accents[mk]} onClick={()=>setSelectedMode(mk)}/>
+                <ModeCard key={mk} plan={plans[mk]} isActive={activeMode===mk} isRecommended={recommended_mode===mk} accent={accents[mk]} onClick={()=>handleModeSelect(mk)}/>
               ))}
             </div>
           ):(
