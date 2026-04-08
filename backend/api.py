@@ -7,7 +7,11 @@ import pandas as pd
 import os
 import hashlib
 import io
+import json
+import time
+import threading
 import numpy as np
+from pywebpush import webpush, WebPushException
 
 from fastapi import UploadFile, File
 
@@ -45,6 +49,18 @@ app.add_middleware(
 USERS_DIR = "users"
 os.makedirs(USERS_DIR, exist_ok=True)
 
+PUSH_SUBSCRIPTION_FILE = os.path.join(USERS_DIR, "push_subscriptions.json")
+PUSH_REMINDER_STATE_FILE = os.path.join(USERS_DIR, "push_reminder_state.json")
+VAPID_PUBLIC_KEY = os.environ.get(
+    "VAPID_PUBLIC_KEY",
+    "BHyCQIIrX3kTHzOe00Wj0N7mC-BN_oG860R3p62uCCQ8nX8VRJAtzMDo89VN9oXEWC79HpXstivOySqi-hDyDPs"
+)
+VAPID_PRIVATE_KEY = os.environ.get(
+    "VAPID_PRIVATE_KEY",
+    "zGGsEQAU4ilGg8vnJUoT9XrTISzNqufqIKRtO2M6E5k"
+)
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:hello@pulseapp.local")
+
 # --------------------------------------------------
 # Pydantic models
 # --------------------------------------------------
@@ -77,6 +93,14 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+class PushSubscription(BaseModel):
+    username: str
+    subscription: dict
+
+class PushUnsubscribe(BaseModel):
+    username: str
+    endpoint: str
+
 # --------------------------------------------------
 # Auth dependency
 # --------------------------------------------------
@@ -100,6 +124,153 @@ def get_user_file(username: str) -> str:
 
 def user_exists(username: str) -> bool:
     return os.path.exists(get_user_file(username))
+
+# --------------------------------------------------
+# Push helpers
+# --------------------------------------------------
+
+def _load_push_subscriptions() -> dict:
+    if not os.path.exists(PUSH_SUBSCRIPTION_FILE):
+        return {}
+    with open(PUSH_SUBSCRIPTION_FILE, "r", encoding="utf-8") as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return {}
+
+
+def _save_push_subscriptions(data: dict):
+    with open(PUSH_SUBSCRIPTION_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def _load_reminder_state() -> dict:
+    if not os.path.exists(PUSH_REMINDER_STATE_FILE):
+        return {}
+    with open(PUSH_REMINDER_STATE_FILE, "r", encoding="utf-8") as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return {}
+
+
+def _save_reminder_state(state: dict):
+    with open(PUSH_REMINDER_STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+
+
+def _store_subscription(username: str, subscription: dict):
+    subs = _load_push_subscriptions()
+    user_subs = subs.get(username, [])
+    if not any(s.get("endpoint") == subscription.get("endpoint") for s in user_subs):
+        user_subs.append(subscription)
+        subs[username] = user_subs
+        _save_push_subscriptions(subs)
+
+
+def _remove_subscription(username: str, endpoint: str):
+    subs = _load_push_subscriptions()
+    user_subs = subs.get(username, [])
+    user_subs = [s for s in user_subs if s.get("endpoint") != endpoint]
+    if user_subs or username in subs:
+        subs[username] = user_subs
+        if not user_subs:
+            subs.pop(username, None)
+        _save_push_subscriptions(subs)
+
+
+def _send_push(subscription: dict, payload: dict):
+    try:
+        webpush(
+            subscription_info=subscription,
+            data=json.dumps(payload),
+            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims={"sub": VAPID_SUBJECT},
+        )
+        return True
+    except WebPushException as exc:
+        if exc.response and exc.response.status_code in {404, 410}:
+            return False
+        return True
+    except Exception:
+        return True
+
+
+def _notify_user(username: str, title: str, message: str, url: str = "/"):
+    subs = _load_push_subscriptions().get(username, [])
+    if not subs or not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
+        return
+
+    remaining = []
+    for sub in subs:
+        payload = {"title": title, "body": message, "url": url}
+        keep = _send_push(sub, payload)
+        if keep:
+            remaining.append(sub)
+    if len(remaining) != len(subs):
+        all_subs = _load_push_subscriptions()
+        if remaining:
+            all_subs[username] = remaining
+        else:
+            all_subs.pop(username, None)
+        _save_push_subscriptions(all_subs)
+
+
+def _today_date() -> str:
+    return pd.Timestamp.now().normalize().strftime("%Y-%m-%d")
+
+
+def _has_unfinished_tasks(username: str) -> bool:
+    try:
+        tm = TaskManager(username, USERS_DIR)
+        tasks = tm.get_todays_tasks()
+        return any(not t.get("completed") for t in tasks)
+    except Exception:
+        return False
+
+
+def _needs_log_entry(username: str) -> bool:
+    if not user_exists(username):
+        return False
+    df = pd.read_csv(get_user_file(username))
+    if df.empty or "date" not in df.columns:
+        return True
+    today = _today_date()
+    return not any(df["date"].astype(str).str[:10] == today)
+
+
+def _dispatch_push_reminders():
+    state = _load_reminder_state()
+    subscriptions = _load_push_subscriptions()
+    now = int(time.time())
+    for username, subs in subscriptions.items():
+        last_sent = state.get(username, 0)
+        if now - last_sent < 60 * 60:
+            continue
+        if _needs_log_entry(username):
+            _notify_user(username, "Log your Pulse entry", "You haven't logged today's wellness entry yet.", "/log")
+            state[username] = now
+        elif _has_unfinished_tasks(username):
+            _notify_user(username, "Finish your tasks", "You have unfinished tasks waiting in Pulse.", "/tasks")
+            state[username] = now
+    _save_reminder_state(state)
+
+
+def _start_push_reminder_thread():
+    def worker():
+        while True:
+            try:
+                _dispatch_push_reminders()
+            except Exception:
+                pass
+            time.sleep(60 * 60)
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+
+@app.on_event("startup")
+def _startup_event():
+    _start_push_reminder_thread()
+
 
 def build_analysis(username: str) -> dict:
     cache_key = (username, _csv_hash(username))
@@ -239,6 +410,49 @@ def list_users(current_user: str = Depends(get_current_user)):
         if f.endswith(".csv")
     ]
     return {"users": users}
+
+
+@app.get("/push/vapid_public_key")
+def get_push_public_key(
+    current_user: str = Depends(get_current_user),
+):
+    return {"publicKey": VAPID_PUBLIC_KEY}
+
+
+@app.post("/push/subscribe")
+def subscribe_push(
+    payload: PushSubscription,
+    current_user: str = Depends(get_current_user),
+):
+    if payload.username != current_user:
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    if not payload.subscription or not payload.subscription.get("endpoint"):
+        raise HTTPException(status_code=400, detail="Invalid subscription")
+    _store_subscription(payload.username, payload.subscription)
+    return {"message": "Subscription saved"}
+
+
+@app.post("/push/unsubscribe")
+def unsubscribe_push(
+    payload: PushUnsubscribe,
+    current_user: str = Depends(get_current_user),
+):
+    if payload.username != current_user:
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    _remove_subscription(payload.username, payload.endpoint)
+    return {"message": "Subscription removed"}
+
+
+@app.post("/push/send-test")
+def send_test_push(
+    payload: PushSubscription,
+    current_user: str = Depends(get_current_user),
+):
+    if payload.username != current_user:
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    _store_subscription(payload.username, payload.subscription)
+    _notify_user(payload.username, "Pulse reminder test", "This is a test notification from Pulse.", "/")
+    return {"message": "Test push sent"}
 
 
 @app.get("/users/{username}/analysis")

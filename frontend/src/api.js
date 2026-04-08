@@ -45,7 +45,46 @@ export async function login(username, password) {
   if (!res.ok) throw new Error(data.detail || "Login failed")
   return data
 }
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i)
+  }
+  return outputArray
+}
 
+export async function registerPushSubscription(username) {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
+    throw new Error('Push notifications are not supported by this browser.')
+  }
+
+  const keyRes = await apiFetch('/push/vapid_public_key')
+  if (!keyRes.ok) {
+    const err = await keyRes.text()
+    throw new Error(err || 'Could not fetch public key.')
+  }
+  const { publicKey } = await keyRes.json()
+
+  const registration = await navigator.serviceWorker.ready
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  })
+
+  const res = await apiFetch('/push/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, subscription: subscription.toJSON() }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || 'Subscription failed')
+  }
+  return subscription
+}
 export async function register(username, password) {
   const res = await fetch(`${BASE}/auth/register`, {
     method: "POST",

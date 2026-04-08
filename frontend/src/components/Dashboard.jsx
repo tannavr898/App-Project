@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react"
-import { apiFetch } from "../api"
+import { apiFetch, registerPushSubscription } from "../api"
 
 function TimeRangeChart({ data, keyPerf, keyBurnout }) {
   const svgRef       = useRef(null)
@@ -232,6 +232,28 @@ export default function Dashboard({ username, onNavigate }) {
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState(null)
   const [selectedMode, setSelectedMode] = useState(null)
+  const [pushStatus,   setPushStatus]   = useState("default")
+  const [pushLoading,  setPushLoading]  = useState(false)
+
+  useEffect(() => {
+    if (typeof Notification !== "undefined") {
+      setPushStatus(Notification.permission)
+    }
+  }, [])
+
+  const enablePush = async () => {
+    if (pushLoading) return
+    setPushLoading(true)
+    setError(null)
+    try {
+      await registerPushSubscription(username)
+      setPushStatus(Notification.permission)
+    } catch (err) {
+      setError(err.message || "Could not enable reminders.")
+    } finally {
+      setPushLoading(false)
+    }
+  }
 
   useEffect(() => {
     setLoading(true); setError(null)
@@ -302,7 +324,17 @@ export default function Dashboard({ username, onNavigate }) {
           <h1 style={{fontSize:16,fontWeight:500,color:"var(--text)"}}>{greeting}, {username}</h1>
           <p style={{fontSize:12,color:"var(--faint)",marginTop:2}}>Here's how you're doing</p>
         </div>
-        <span style={{fontSize:12,color:"var(--faint)",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"5px 10px"}}>{today}</span>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:12,color:"var(--faint)",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"5px 10px"}}>{today}</span>
+          {pushStatus !== "granted" ? (
+            <button onClick={enablePush} disabled={pushLoading}
+              style={{fontSize:11,padding:"6px 12px",borderRadius:"999px",border:"1px solid var(--border)",background:pushLoading?"var(--border)":"var(--text)",color:"var(--bg)",cursor:pushLoading?"not-allowed":"pointer",fontFamily:"inherit"}}>
+              {pushLoading ? "Enabling…" : "Enable reminders"}
+            </button>
+          ) : (
+            <span style={{fontSize:11,color:"var(--green-txt)",background:"var(--green-bg)",borderRadius:"999px",padding:"6px 10px"}}>Reminders enabled</span>
+          )}
+        </div>
       </div>
 
       {/* Tasks bar */}
