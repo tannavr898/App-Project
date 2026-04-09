@@ -213,7 +213,7 @@ export default function Tasks({ username }) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 12, alignItems: "start" }}>
+      <div className="tasks-grid">
 
         {/* LEFT — task list */}
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

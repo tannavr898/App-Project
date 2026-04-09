@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Dashboard from "./components/Dashboard"
 import LogEntry from "./components/LogEntry"
 import Tasks from "./components/Tasks"
@@ -62,6 +62,14 @@ export default function App() {
   const [user, setUser] = useState(() => getSavedUser())
   const [page, setPage] = useState("dashboard")
   const [dark, setDark] = useState(() => localStorage.getItem("pulse-theme") === "dark")
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 640)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   const toggleDark = () => {
     setDark(d => {
@@ -72,6 +80,12 @@ export default function App() {
   }
 
   const vars = dark ? DARK : LIGHT
+
+  const navItems = [
+    { id: "log",       label: "Log Entry" },
+    { id: "dashboard", label: "Overview" },
+    { id: "tasks",     label: "Tasks" },
+  ]
 
   return (
     <div style={{
@@ -84,7 +98,42 @@ export default function App() {
     }}>
       {!user ? (
         <UserSelect onSelect={setUser} />
+      ) : isMobile ? (
+        // Mobile Layout
+        <div className="mobile-app">
+          {/* Main Content */}
+          <main className="mobile-main">
+            {page === "dashboard" && <Dashboard username={user} onNavigate={setPage} />}
+            {page === "log"       && <LogEntry  username={user} onSaved={() => setPage("dashboard")} />}
+            {page === "tasks"     && <Tasks     username={user} />}
+          </main>
+
+          {/* Navigation Tabs */}
+          <nav className="mobile-nav">
+            {navItems.map(item => (
+              <button
+                key={item.id}
+                className={`mobile-nav-item ${page === item.id ? "active" : ""}`}
+                onClick={() => setPage(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+
+          {/* Bottom Bar */}
+          <div className="mobile-bottom">
+            <div className="mobile-user">
+              <div className="avatar">{user.slice(0, 2).toUpperCase()}</div>
+              <button className="switch-btn" onClick={() => { clearAuth(); setUser(null) }}>switch</button>
+            </div>
+            <button className="theme-toggle" onClick={toggleDark}>
+              {dark ? "☀️" : "🌙"}
+            </button>
+          </div>
+        </div>
       ) : (
+        // Desktop Layout
         <div className="app">
           <aside className="sidebar">
             <div className="logo">
