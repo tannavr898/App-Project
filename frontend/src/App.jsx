@@ -108,28 +108,31 @@ export default function App() {
             {page === "tasks"     && <Tasks     username={user} />}
           </main>
 
-          {/* Navigation Tabs */}
-          <nav className="mobile-nav">
-            {navItems.map(item => (
-              <button
-                key={item.id}
-                className={`mobile-nav-item ${page === item.id ? "active" : ""}`}
-                onClick={() => setPage(item.id)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
-
-          {/* Bottom Bar */}
-          <div className="mobile-bottom">
-            <div className="mobile-user">
-              <div className="avatar">{user.slice(0, 2).toUpperCase()}</div>
-              <button className="switch-btn" onClick={() => { clearAuth(); setUser(null) }}>switch</button>
+          {/* Unified Bottom Bar */}
+          <div className="mobile-bottom-bar">
+            {/* Navigation Tabs */}
+            <div className="mobile-tabs">
+              {navItems.map(item => (
+                <button
+                  key={item.id}
+                  className={`mobile-tab ${page === item.id ? "active" : ""}`}
+                  onClick={() => setPage(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
-            <button className="theme-toggle" onClick={toggleDark}>
-              {dark ? "☀️" : "🌙"}
-            </button>
+
+            {/* User Controls */}
+            <div className="mobile-controls">
+              <div className="mobile-user">
+                <div className="avatar">{user.slice(0, 2).toUpperCase()}</div>
+                <button className="switch-btn" onClick={() => { clearAuth(); setUser(null) }}>switch</button>
+              </div>
+              <button className="theme-toggle" onClick={toggleDark}>
+                {dark ? "☀️" : "🌙"}
+              </button>
+            </div>
           </div>
         </div>
       ) : (
