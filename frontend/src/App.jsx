@@ -82,7 +82,7 @@ export default function App() {
   const vars = dark ? DARK : LIGHT
 
   const navItems = [
-    { id: "log",       label: "Log" },
+    { id: "log",       label: "Log Entry" },
     { id: "dashboard", label: "Overview" },
     { id: "tasks",     label: "Tasks" },
   ]
@@ -90,50 +90,65 @@ export default function App() {
   return (
     <div style={{
       ...vars,
-      minHeight: "100vh",
+      height: "100vh",
       background: vars["--bg"],
       color: vars["--text"],
       fontFamily: "'DM Sans', sans-serif",
+      overflow: "hidden",
       transition: "background 0.25s, color 0.25s",
     }}>
       {!user ? (
         <UserSelect onSelect={setUser} />
       ) : isMobile ? (
-        // Mobile Layout
-        <div className="mobile-app">
+        <div className="mobile-app" style={{display: "flex", flexDirection: "column", height: "100vh"}}>
           {/* Main Content */}
-          <main className="mobile-main">
+          <main className="mobile-main" style={{flex: 1, overflowY: "auto", paddingBottom: "70px", background: vars["--bg"]}}>
             {page === "dashboard" && <Dashboard username={user} onNavigate={setPage} />}
             {page === "log"       && <LogEntry  username={user} onSaved={() => setPage("dashboard")} />}
             {page === "tasks"     && <Tasks     username={user} />}
           </main>
 
-          {/* Unified Bottom Bar */}
-          <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface)", borderTop: "1px solid var(--border)", gap: "8px"}}>
-            {/* Profile left: avatar + Switch button below */}
-            <div style={{display: "flex", flexDirection: "column", alignItems: "center", gap: 4}}>
-              <div style={{width: 40, height: 40, borderRadius: "50%", background: "var(--blue)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600}}>{user.slice(0, 2).toUpperCase()}</div>
-              <button style={{background: "none", border: "none", color: "var(--blue)", fontSize: 10, fontWeight: 500, cursor: "pointer", padding: 0, fontFamily: "inherit"}} onClick={() => { clearAuth(); setUser(null) }}>Switch</button>
+          {/* Fixed Bottom Bar - always visible */}
+          <div style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "8px 12px",
+            background: vars["--surface"],
+            borderTop: "1px solid var(--border)",
+            gap: "8px",
+            zIndex: 1000,
+            height: "70px",
+            boxSizing: "border-box"
+          }}>
+            {/* Profile: avatar + Switch below */}
+            <div style={{display: "flex", flexDirection: "column", alignItems: "center", gap: "4px"}}>
+              <div style={{width: "40px", height: "40px", borderRadius: "50%", background: "var(--blue)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", fontWeight: 600}}>{user.slice(0, 2).toUpperCase()}</div>
+              <button style={{background: "none", border: "none", color: "var(--blue)", fontSize: "10px", fontWeight: 500, cursor: "pointer", padding: "0", fontFamily: "inherit"}} onClick={() => { clearAuth(); setUser(null) }}>Switch</button>
             </div>
 
-            {/* Navigation Tabs */}
-            <div style={{display: "flex", gap: 2}}>
+            {/* Tabs - full text, small font, no ellipsis */}
+            <div style={{display: "flex", gap: "2px", flex: 1}}>
               {navItems.map(item => (
                 <button
                   key={item.id}
                   style={{
-                    padding: "6px 12px",
+                    flex: 1,
+                    padding: "6px 8px",
                     borderRadius: "var(--radius-sm)",
-                    border: "1px solid var(--border)",
-                    background: page === item.id ? "var(--text)" : "transparent",
-                    color: page === item.id ? "var(--bg)" : "var(--muted)",
-                    fontSize: 10,
-                    fontWeight: page === item.id ? 600 : 500,
+                    border: page === item.id ? "1px solid var(--text)" : "1px solid transparent",
+                    background: page === item.id ? vars["--text"] : "transparent",
+                    color: page === item.id ? vars["--bg"] : vars["--muted"],
+                    fontSize: "10px",
+                    fontWeight: page === item.id ? "600" : "500",
                     cursor: "pointer",
                     fontFamily: "inherit",
                     whiteSpace: "nowrap",
-                    border: "1px solid transparent",
-                    flex: "1"
+                    textAlign: "center"
                   }}
                   onClick={() => setPage(item.id)}
                 >
@@ -143,7 +158,7 @@ export default function App() {
             </div>
 
             {/* Theme toggle */}
-            <button style={{width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16}} onClick={toggleDark}>
+            <button style={{width: "36px", height: "36px", borderRadius: "50%", border: "1px solid var(--border)", background: vars["--bg"], color: vars["--text"], cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px"}} onClick={toggleDark}>
               {dark ? "☀️" : "🌙"}
             </button>
           </div>
