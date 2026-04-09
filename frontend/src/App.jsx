@@ -109,13 +109,20 @@ export default function App() {
           </main>
 
           {/* Unified Bottom Bar */}
-          <div className="mobile-bottom-bar">
-            {/* Navigation Tabs */}
-            <div className="mobile-tabs">
+          <div className="mobile-bottom-bar" style={{display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "var(--surface)", borderTop: "1px solid var(--border)"}}>
+            {/* Profile left */}
+            <div className="mobile-profile" style={{display: "flex", alignItems: "center", gap: 10, minWidth: 0}}>
+              <div className="avatar" style={{width: 36, height: 36, borderRadius: "50%", background: "var(--blue)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600}}>{user.slice(0, 2).toUpperCase()}</div>
+              <button className="switch-btn" style={{background: "none", border: "none", color: "var(--blue-txt)", fontSize: 12, fontWeight: 500, cursor: "pointer", padding: 0, fontFamily: "inherit"}} onClick={() => { clearAuth(); setUser(null) }}>Switch</button>
+            </div>
+
+            {/* Navigation Tabs center-right */}
+            <div className="mobile-tabs" style={{display: "flex", gap: 4}}>
               {navItems.map(item => (
                 <button
                   key={item.id}
                   className={`mobile-tab ${page === item.id ? "active" : ""}`}
+                  style={{padding: "8px 16px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: page === item.id ? "var(--text)" : "transparent", color: page === item.id ? "var(--bg)" : "var(--muted)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap"}}
                   onClick={() => setPage(item.id)}
                 >
                   {item.label}
@@ -123,13 +130,9 @@ export default function App() {
               ))}
             </div>
 
-            {/* User Controls */}
-            <div className="mobile-controls">
-              <div className="mobile-user">
-                <div className="avatar">{user.slice(0, 2).toUpperCase()}</div>
-                <button className="switch-btn" onClick={() => { clearAuth(); setUser(null) }}>switch</button>
-              </div>
-              <button className="theme-toggle" onClick={toggleDark}>
+            {/* Theme toggle far right */}
+            <div style={{display: "flex", alignItems: "center"}}>
+              <button className="theme-toggle" style={{width: 40, height: 40, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18}} onClick={toggleDark}>
                 {dark ? "☀️" : "🌙"}
               </button>
             </div>
