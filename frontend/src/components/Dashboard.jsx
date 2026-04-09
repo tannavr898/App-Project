@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { apiFetch, registerPushSubscription } from "../api"
+import StreakBadge from "./StreakBadge"
 
 function TimeRangeChart({ data, keyPerf, keyBurnout }) {
   const svgRef       = useRef(null)
