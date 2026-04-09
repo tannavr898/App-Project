@@ -234,6 +234,7 @@ export default function Dashboard({ username, onNavigate }) {
   const [selectedMode, setSelectedMode] = useState(() => localStorage.getItem(`pulse-plan-${username}`))
   const [pushStatus,   setPushStatus]   = useState("default")
   const [pushLoading,  setPushLoading]  = useState(false)
+  const [entries,      setEntries]      = useState([])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -260,15 +261,26 @@ export default function Dashboard({ username, onNavigate }) {
 
   useEffect(() => {
     setLoading(true); setError(null)
+
+    // Fetch analysis + tasks
     apiFetch(`/users/${username}/analysis`)
       .then(r=>{ if(!r.ok) return r.json().then(e=>Promise.reject(e.detail)); return r.json() })
       .then(d=>{
         setData(d)
-        const recMode = d.recommended_mode || 'comfortable'; const recPlan = d.plans?.[recMode] || d.optimal_plan; return apiFetch(`/tasks/${username}?recommended_hours=${recPlan?.study??3.5}`)
+        const recMode = d.recommended_mode || 'comfortable'; const recPlan = d.plans?.[recMode] || d.optimal_plan
+        return apiFetch(`/tasks/${username}?recommended_hours=${recPlan?.study??3.5}`)
       })
       .then(r=>r.json())
-      .then(t=>{ setTasks(t.tasks||[]); setProgress(t.progress||null); setLoading(false) })
-      .catch(e=>{ setError(String(e)); setLoading(false) })
+      .then(t=>{ setTasks(t.tasks||[]); setProgress(t.progress||null) })
+      .catch(e=>{})
+
+    // Fetch entries for StreakBadge
+    apiFetch(`/users/${username}/entries`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setEntries(d.entries || []))
+      .catch(() => setEntries([]))
+      
+    setLoading(false)
   }, [username])
 
   // Refetch tasks when user picks a different plan mode
@@ -335,7 +347,7 @@ export default function Dashboard({ username, onNavigate }) {
         </div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
           <StreakBadge entries={entries} />
-          <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          {!entries.length && <div style={{fontSize:11,color:"var(--faint)"}}>No entries yet</div>}
             <span style={{fontSize:12,color:"var(--faint)",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"5px 10px",whiteSpace:"nowrap"}}>{today}</span>
             {pushStatus === "granted" ? (
               <span style={{fontSize:11,color:"var(--green-txt)",background:"var(--green-bg)",borderRadius:"999px",padding:"6px 10px",whiteSpace:"nowrap"}}>Reminders enabled</span>
