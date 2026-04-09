@@ -3,7 +3,8 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ── Reset any Vite defaults that could interfere ── */
-:root, html, body {
+:root, html, body, #root {
+  min-height: 100vh;
   background: transparent;
   color: inherit;
 }
