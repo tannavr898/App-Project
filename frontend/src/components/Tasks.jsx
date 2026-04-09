@@ -1,7 +1,12 @@
 import { apiFetch } from "../api"
 import { useState, useEffect } from "react"
 
-const getLocalDate = date => new Date(date).toLocaleDateString("en-CA")
+const getLocalDate = date => {
+  // If it's already a date string (YYYY-MM-DD), return as-is to avoid timezone issues
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date
+  // For Date objects, convert to local date string
+  return new Date(date).toLocaleDateString("en-CA")
+}
 
 const CATEGORIES = [
   { id: "study",    label: "Study",    color: "var(--green)",  bg: "var(--green-bg)",  txt: "var(--green-txt)" },
@@ -30,8 +35,11 @@ function CircleProgress({ pct, size = 80, stroke = 7 }) {
 }
 
 function WeeklyBar({ date, rate }) {
-  const d = new Date(date)
-  const day = d.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 1)
+  // date is a string like "2026-04-08"
+  // Parse it correctly in local timezone to get the day of week
+  const [year, month, day] = date.split('-').map(Number)
+  const d = new Date(year, month - 1, day)
+  const dayChar = d.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 1)
   const today = new Date().toLocaleDateString("en-CA")
   const isToday = date === today
   const color = rate >= 0.9 ? "var(--green)" : rate >= 0.5 ? "var(--blue)" : rate > 0 ? "var(--amber)" : "var(--border)"
@@ -40,7 +48,7 @@ function WeeklyBar({ date, rate }) {
       <div style={{ width: 24, height: 48, background: "var(--border)", borderRadius: 99, overflow: "hidden", display: "flex", alignItems: "flex-end", border: isToday ? `2px solid ${color}` : "none", boxSizing: "border-box" }}>
         <div style={{ width: "100%", height: `${Math.max(4, rate * 100)}%`, background: color, borderRadius: 99, transition: "height 0.6s ease" }} />
       </div>
-      <span style={{ fontSize: 9, color: "var(--faint)", fontWeight: isToday ? 500 : 400 }}>{day}</span>
+      <span style={{ fontSize: 9, color: "var(--faint)", fontWeight: isToday ? 500 : 400 }}>{dayChar}</span>
     </div>
   )
 }
@@ -68,9 +76,24 @@ export default function Tasks({ username }) {
   }
 
   useEffect(() => {
+    // Fetch selected plan mode from localStorage
+    const selectedMode = localStorage.getItem(`pulse-plan-${username}`)
+    
     apiFetch(`/users/${username}/analysis`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.optimal_plan?.study) setRecHours(d.optimal_plan.study) })
+      .then(d => {
+        if (d?.plans && selectedMode) {
+          // Use the selected mode's study hours
+          const selectedPlan = d.plans[selectedMode]
+          if (selectedPlan?.study) {
+            setRecHours(selectedPlan.study)
+          } else if (d?.optimal_plan?.study) {
+            setRecHours(d.optimal_plan.study)
+          }
+        } else if (d?.optimal_plan?.study) {
+          setRecHours(d.optimal_plan.study)
+        }
+      })
       .catch(() => {})
     apiFetch(`/tasks/${username}/history`)
       .then(r => r.ok ? r.json() : null)
@@ -82,7 +105,31 @@ export default function Tasks({ username }) {
       .catch(() => {})
   }, [username])
 
-  useEffect(() => { load() }, [username, recHours])
+  // Re-fetch tasks when recHours changes OR when selected plan changes
+  useEffect(() => {
+    const selectedMode = localStorage.getItem(`pulse-plan-${username}`)
+    load()
+  }, [username, recHours])
+
+  // Listen for plan changes made on the Dashboard
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const selectedMode = localStorage.getItem(`pulse-plan-${username}`)
+      if (selectedMode) {
+        apiFetch(`/users/${username}/analysis`)
+          .then(r => r.ok ? r.json() : null)
+          .then(d => {
+            if (d?.plans?.[selectedMode]?.study) {
+              setRecHours(d.plans[selectedMode].study)
+            }
+          })
+          .catch(() => {})
+      }
+    }
+    
+    window.addEventListener("storage", handleStorageChange)
+    return () => window.removeEventListener("storage", handleStorageChange)
+  }, [username])
 
   const addTask = async () => {
     if (!newName.trim() || newHours <= 0) return
