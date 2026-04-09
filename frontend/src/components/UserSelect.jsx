@@ -19,6 +19,9 @@ export default function UserSelect({ onSelect }) {
     try {
       const fn   = mode === "login" ? login : register
       const data = await fn(username.trim().toLowerCase(), password)
+      if (!data.username || !data.token) {
+        throw new Error("Invalid authentication response from server")
+      }
       saveAuth(data.username, data.token)
       onSelect(data.username)
     } catch (e) {

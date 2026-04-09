@@ -335,6 +335,9 @@ def register(req: RegisterRequest):
     try:
         user  = register_user(req.username, req.password)
         token = create_token(user["username"])
+        # Create empty CSV for new user
+        if not user_exists(req.username):
+            pd.DataFrame().to_csv(get_user_file(req.username), index=False)
         return {"username": user["username"], "token": token}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
