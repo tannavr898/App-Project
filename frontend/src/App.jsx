@@ -112,8 +112,11 @@ export default function App() {
           <div className="mobile-bottom-bar" style={{display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "var(--surface)", borderTop: "1px solid var(--border)"}}>
             {/* Profile left */}
             <div className="mobile-profile" style={{display: "flex", alignItems: "center", gap: 10, minWidth: 0}}>
-              <div className="avatar" style={{width: 36, height: 36, borderRadius: "50%", background: "var(--blue)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600}}>{user.slice(0, 2).toUpperCase()}</div>
-              <button className="switch-btn" style={{background: "none", border: "none", color: "var(--blue-txt)", fontSize: 12, fontWeight: 500, cursor: "pointer", padding: 0, fontFamily: "inherit"}} onClick={() => { clearAuth(); setUser(null) }}>Switch</button>
+              <div style={{display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2}}>
+                <div className="avatar" style={{width: 36, height: 36, borderRadius: "50%", background: "var(--blue)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600}}>{user.slice(0, 2).toUpperCase()}</div>
+                <div style={{fontSize: 11, color: "var(--faint)", fontWeight: 500}}>{user}</div>
+                <button className="switch-btn" style={{background: "none", border: "none", color: "var(--blue-txt)", fontSize: 11, fontWeight: 500, cursor: "pointer", padding: 0, fontFamily: "inherit", textDecoration: "underline"}} onClick={() => { clearAuth(); setUser(null) }}>Switch account</button>
+              </div>
             </div>
 
             {/* Navigation Tabs center-right */}
