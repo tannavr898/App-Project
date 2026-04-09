@@ -56,29 +56,28 @@ function TimeRangeChart({ data, keyPerf, keyBurnout }) {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:8,height:"100%"}}>
-      {/* Scores + controls */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:20}}>
+      {/* Scores */}
+      <div style={{display:"flex",flexWrap:"wrap",justifyContent:"space-between",gap:10,alignItems:"flex-start"}}>
+        <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:12}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <div style={{width:8,height:8,borderRadius:"50%",background:"#1D9E75"}}/>
-            <span style={{fontSize:11,color:"var(--faint)"}}>Performance</span>
-            <span style={{fontSize:22,fontWeight:500,color:pc}}>{hP.toFixed(0)}</span>
-            {pTrend!==null&&<span style={{fontSize:10,color:pTrend>0?"#1D9E75":"#D85A30"}}>{pTrend>0?"↑":"↓"}{Math.abs(pTrend).toFixed(1)}</span>}
+            <span style={{fontSize:10,color:"var(--faint)"}}>Performance</span>
+            <span style={{fontSize:18,fontWeight:500,color:pc}}>{hP.toFixed(0)}</span>
+            {pTrend!==null&&<span style={{fontSize:9,color:pTrend>0?"#1D9E75":"#D85A30"}}>{pTrend>0?"↑":"↓"}{Math.abs(pTrend).toFixed(1)}</span>}
           </div>
-          <div style={{width:1,height:16,background:"var(--border)"}}/>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <div style={{width:8,height:8,borderRadius:"50%",background:"#D85A30"}}/>
-            <span style={{fontSize:11,color:"var(--faint)"}}>Burnout</span>
-            <span style={{fontSize:22,fontWeight:500,color:bc}}>{hB.toFixed(0)}</span>
-            {bTrend!==null&&<span style={{fontSize:10,color:bTrend<0?"#1D9E75":"#D85A30"}}>{bTrend>0?"↑":"↓"}{Math.abs(bTrend).toFixed(1)}</span>}
+            <span style={{fontSize:10,color:"var(--faint)"}}>Burnout</span>
+            <span style={{fontSize:18,fontWeight:500,color:bc}}>{hB.toFixed(0)}</span>
+            {bTrend!==null&&<span style={{fontSize:9,color:bTrend<0?"#1D9E75":"#D85A30"}}>{bTrend>0?"↑":"↓"}{Math.abs(bTrend).toFixed(1)}</span>}
           </div>
-          {hD&&<><div style={{width:1,height:16,background:"var(--border)"}}/><span style={{fontSize:10,color:"var(--faint)"}}>{hD.slice(5)}</span></>}
         </div>
-        <div style={{display:"flex",gap:4}}>
-          {[7,14,30].map(r=>(
-            <button key={r} onClick={()=>setRange(r)} style={{padding:"3px 10px",borderRadius:99,fontSize:10,cursor:"pointer",fontFamily:"inherit",border:"1px solid var(--border)",background:range===r?"var(--text)":"transparent",color:range===r?"var(--bg)":"var(--faint)",transition:"all 0.15s"}}>{r}d</button>
-          ))}
-        </div>
+        {hD && <div style={{fontSize:10,color:"var(--faint)",whiteSpace:"nowrap"}}>{hD.slice(5)}</div>}
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
+        {[7,14,30].map(r=>(
+          <button key={r} onClick={()=>setRange(r)} style={{padding:"5px 12px",borderRadius:99,fontSize:10,cursor:"pointer",fontFamily:"inherit",border:"1px solid var(--border)",background:range===r?"var(--text)":"transparent",color:range===r?"var(--bg)":"var(--faint)",transition:"all 0.15s"}}>{r}d</button>
+        ))}
       </div>
 
       {/* Chart — fills remaining height, full width */}
@@ -162,26 +161,26 @@ function DonutChart({ sleep, study, training }) {
 function DonutChartLarge({ sleep, study, training }) {
   const free = Math.max(0, 24-sleep-study-training)
   const segs = [{label:"Sleep",value:sleep,color:"#378ADD"},{label:"Study",value:study,color:"#1D9E75"},{label:"Training",value:training,color:"#7F77DD"},{label:"Free",value:free,color:"rgba(128,128,120,0.2)"}]
-  const r=40,sw=11,circ=2*Math.PI*r
+  const r=36,sw=10,circ=2*Math.PI*r
   let off=0
   const arcs = segs.map(s=>{const dash=(s.value/24)*circ;const a={...s,dash,gap:circ-dash,off};off+=dash;return a})
   return (
-    <div style={{display:"flex",alignItems:"center",gap:16,flex:1}}>
-      <div style={{position:"relative",width:98,height:98,flexShrink:0}}>
-        <svg width="98" height="98" viewBox="0 0 98 98" style={{transform:"rotate(-90deg)"}}>
-          {arcs.map((a,i)=><circle key={i} cx="49" cy="49" r={r} fill="none" stroke={a.color} strokeWidth={sw} strokeDasharray={`${a.dash} ${a.gap}`} strokeDashoffset={-a.off}/>)}
+    <div style={{display:"flex",alignItems:"center",gap:12,flex:1}}>
+      <div style={{position:"relative",width:84,height:84,flexShrink:0}}>
+        <svg width="84" height="84" viewBox="0 0 84 84" style={{transform:"rotate(-90deg)"}}>
+          {arcs.map((a,i)=><circle key={i} cx="42" cy="42" r={r} fill="none" stroke={a.color} strokeWidth={sw} strokeDasharray={`${a.dash} ${a.gap}`} strokeDashoffset={-a.off}/>)}
         </svg>
         <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-          <div style={{fontSize:16,fontWeight:500,color:"var(--text)",lineHeight:1}}>{free.toFixed(1)}</div>
-          <div style={{fontSize:9,color:"var(--faint)",marginTop:2}}>hrs free</div>
+          <div style={{fontSize:14,fontWeight:500,color:"var(--text)",lineHeight:1}}>{free.toFixed(1)}</div>
+          <div style={{fontSize:8,color:"var(--faint)",marginTop:1}}>hrs free</div>
         </div>
       </div>
-      <div style={{flex:1,display:"flex",flexDirection:"column",gap:7}}>
+      <div style={{flex:1,display:"flex",flexDirection:"column",gap:5}}>
         {segs.filter(s=>s.label!=="Free").map(s=>(
           <div key={s.label}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,color:"var(--muted)",marginBottom:3}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,color:"var(--muted)",marginBottom:2}}>
               <div style={{display:"flex",alignItems:"center",gap:5}}>
-                <div style={{width:8,height:8,borderRadius:"50%",background:s.color}}/><span>{s.label}</span>
+                <div style={{width:7,height:7,borderRadius:"50%",background:s.color}}/><span>{s.label}</span>
               </div>
               <span style={{fontWeight:500,color:"var(--text)"}}>{s.value.toFixed(1)}h</span>
             </div>
@@ -190,7 +189,7 @@ function DonutChartLarge({ sleep, study, training }) {
             </div>
           </div>
         ))}
-        <div style={{fontSize:10,color:"var(--faint)",paddingTop:4,borderTop:"1px solid var(--border)"}}>{free.toFixed(1)}h of 24h free</div>
+        <div style={{fontSize:9,color:"var(--faint)",paddingTop:3,borderTop:"1px solid var(--border)"}}>{free.toFixed(1)}h of 24h free</div>
       </div>
     </div>
   )
@@ -210,14 +209,14 @@ function ModeCard({ plan, isActive, isRecommended, accent, onClick }) {
           <div style={{fontSize:11,color:"var(--faint)",marginTop:4,lineHeight:1.4}}>{plan.context}</div>
         </div>
         <div style={{flex:1,minWidth:0}}><DonutChartLarge sleep={plan.sleep} study={plan.study} training={plan.training}/></div>
-        <div style={{display:"flex",flexDirection:"column",gap:7,flexShrink:0,width:90}}>
-          <div style={{background:"var(--green-bg)",borderRadius:"var(--radius-md)",padding:"10px 14px",textAlign:"center"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:7,flexShrink:0,width:84}}>
+          <div style={{background:"var(--green-bg)",borderRadius:"var(--radius-md)",padding:"8px 12px",textAlign:"center"}}>
             <div style={{fontSize:9,color:"var(--green-txt)",marginBottom:2}}>performance</div>
-            <div style={{fontSize:26,fontWeight:500,color:"var(--green-txt)",lineHeight:1}}>{plan.pred_perf}</div>
+            <div style={{fontSize:20,fontWeight:500,color:"var(--green-txt)",lineHeight:1}}>{plan.pred_perf}</div>
           </div>
-          <div style={{background:bBg,borderRadius:"var(--radius-md)",padding:"10px 14px",textAlign:"center"}}>
+          <div style={{background:bBg,borderRadius:"var(--radius-md)",padding:"8px 12px",textAlign:"center"}}>
             <div style={{fontSize:9,color:bTxt,marginBottom:2}}>burnout</div>
-            <div style={{fontSize:26,fontWeight:500,color:bTxt,lineHeight:1}}>{plan.pred_burnout}</div>
+            <div style={{fontSize:20,fontWeight:500,color:bTxt,lineHeight:1}}>{plan.pred_burnout}</div>
           </div>
         </div>
       </div>
@@ -328,29 +327,24 @@ export default function Dashboard({ username, onNavigate }) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       {/* Header */}
-      <div style={{display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
         <div>
-          <h1 style={{fontSize:16,fontWeight:500,color:"var(--text)"}}>{greeting}, {username}</h1>
-          <p style={{fontSize:12,color:"var(--faint)",marginTop:2}}>Here's how you're doing</p>
+          <h1 style={{fontSize:16,fontWeight:500,color:"var(--text)",marginBottom:4}}>{greeting}, {username}</h1>
+          <p style={{fontSize:12,color:"var(--faint)",marginTop:0}}>Here's how you're doing</p>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <span style={{fontSize:12,color:"var(--faint)",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"5px 10px"}}>{today}</span>
-          {pushStatus === "granted" ? (
-            <span style={{fontSize:11,color:"var(--green-txt)",background:"var(--green-bg)",borderRadius:"999px",padding:"6px 10px"}}>Reminders enabled</span>
-          ) : (
-            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          <StreakBadge entries={entries} />
+          <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:10}}>
+            <span style={{fontSize:12,color:"var(--faint)",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"5px 10px",whiteSpace:"nowrap"}}>{today}</span>
+            {pushStatus === "granted" ? (
+              <span style={{fontSize:11,color:"var(--green-txt)",background:"var(--green-bg)",borderRadius:"999px",padding:"6px 10px",whiteSpace:"nowrap"}}>Reminders enabled</span>
+            ) : (
               <button onClick={enablePush} disabled={pushLoading || pushStatus === "unsupported"}
-                style={{fontSize:11,padding:"6px 12px",borderRadius:"999px",border:"1px solid var(--border)",background:pushLoading?"var(--border)":"var(--text)",color:"var(--bg)",cursor:pushLoading||pushStatus==="unsupported"?"not-allowed":"pointer",fontFamily:"inherit"}}>
+                style={{fontSize:11,padding:"6px 12px",borderRadius:"999px",border:"1px solid var(--border)",background:pushLoading?"var(--border)":"var(--text)",color:"var(--bg)",cursor:pushLoading||pushStatus=== "unsupported"?"not-allowed":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                 {pushLoading ? "Enabling…" : "Enable reminders"}
               </button>
-              {pushStatus === "unsupported" && (
-                <span style={{fontSize:10,color:"var(--faint)",textAlign:"right",maxWidth:220}}>Push reminders are not supported by this browser.</span>
-              )}
-              {pushStatus === "denied" && (
-                <span style={{fontSize:10,color:"var(--red-txt)",textAlign:"right",maxWidth:220}}>Notifications are blocked. Please enable them in your browser settings.</span>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

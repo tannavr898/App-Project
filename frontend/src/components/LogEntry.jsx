@@ -7,15 +7,15 @@ function HourCard({ label, value, onChange, max = 16, step = 0.5, color = "var(-
   const dec = () => onChange(Math.max(0, Math.round((value - step) * 10) / 10))
   const inc = () => onChange(Math.min(max, Math.round((value + step) * 10) / 10))
   return (
-    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px", display: "flex", flexDirection: "column", gap: 12 }}>
-      <span style={{ fontSize: 11, color: "var(--faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</span>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <button onClick={dec} style={{ width: 34, height: 34, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", flexShrink: 0 }}>−</button>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 40, fontWeight: 500, color: "var(--text)", lineHeight: 1 }}>{value.toFixed(1)}</div>
+    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "16px", display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+      <span style={{ fontSize: 10, color: "var(--faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <button onClick={dec} style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", flexShrink: 0 }}>−</button>
+        <div style={{ textAlign: "center", minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 32, fontWeight: 500, color: "var(--text)", lineHeight: 1 }}>{value.toFixed(1)}</div>
           <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 4 }}>hours</div>
         </div>
-        <button onClick={inc} style={{ width: 34, height: 34, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", flexShrink: 0 }}>+</button>
+        <button onClick={inc} style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", flexShrink: 0 }}>+</button>
       </div>
       <div style={{ height: 4, background: "var(--border)", borderRadius: 99, overflow: "hidden" }}>
         <div style={{ height: "100%", width: `${(value / max) * 100}%`, background: color, borderRadius: 99, transition: "width 0.3s ease" }} />
@@ -176,26 +176,26 @@ export default function LogEntry({ username, onSaved }) {
   return (
     <div style={{ width: "100%" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div>
-            <h1 style={{ fontSize: 16, fontWeight: 500, color: "var(--text)" }}>Log entry</h1>
-            <p style={{ fontSize: 12, color: "var(--faint)", marginTop: 2 }}>Track your daily wellness</p>
-          </div>
-          <StreakBadge entries={entries} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: "1.5rem" }}>
+        <div>
+          <h1 style={{ fontSize: 16, fontWeight: 500, color: "var(--text)", marginBottom: 4 }}>Log entry</h1>
+          <p style={{ fontSize: 12, color: "var(--faint)", marginTop: 0 }}>Track your daily wellness</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ display: "flex", background: "var(--bg)", borderRadius: "var(--radius-md)", padding: 3, border: "1px solid var(--border)" }}>
-            {["log", "history"].map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{ padding: "5px 16px", borderRadius: "var(--radius-sm)", border: "none", background: tab === t ? "var(--surface)" : "transparent", color: tab === t ? "var(--text)" : "var(--faint)", fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: tab === t ? 500 : 400, transition: "all 0.15s" }}>
-                {t === "log" ? "Log" : "History"}
-              </button>
-            ))}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+          <StreakBadge entries={entries} />
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", background: "var(--bg)", borderRadius: "var(--radius-md)", padding: 3, border: "1px solid var(--border)" }}>
+              {["log", "history"].map(t => (
+                <button key={t} onClick={() => setTab(t)} style={{ padding: "5px 14px", borderRadius: "var(--radius-sm)", border: "none", background: tab === t ? "var(--surface)" : "transparent", color: tab === t ? "var(--text)" : "var(--faint)", fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: tab === t ? 500 : 400, transition: "all 0.15s" }}>
+                  {t === "log" ? "Log" : "History"}
+                </button>
+              ))}
+            </div>
+            {tab === "log" && (
+              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", fontSize: 12, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit", outline: "none", minWidth: 0, flex: "0 0 auto" }} />
+            )}
           </div>
-          {tab === "log" && (
-            <input type="date" value={date} onChange={e => setDate(e.target.value)}
-              style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", fontSize: 13, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit", outline: "none" }} />
-          )}
         </div>
       </div>
 
@@ -212,7 +212,7 @@ export default function LogEntry({ username, onSaved }) {
           {/* Hours */}
           <div style={{ marginBottom: "1.5rem" }}>
             <div style={{ fontSize: 11, fontWeight: 500, color: "var(--faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>Hours</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
               <HourCard label="Sleep"    value={sleep}    onChange={setSleep}    max={14} color="var(--blue)"   />
               <HourCard label="Study"    value={study}    onChange={setStudy}    max={12} color="var(--green)"  />
               <HourCard label="Training" value={training} onChange={setTraining} max={6}  color="var(--purple)" />
