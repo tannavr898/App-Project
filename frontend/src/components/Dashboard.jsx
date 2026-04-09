@@ -260,27 +260,57 @@ export default function Dashboard({ username, onNavigate }) {
   }
 
   useEffect(() => {
-    setLoading(true); setError(null)
+    const loadData = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        // Parallel fetches
+        const [analysisRes, entriesRes] = await Promise.allSettled([
+          apiFetch(`/users/${username}/analysis`),
+          apiFetch(`/users/${username}/entries`)
+        ])
 
-    // Fetch analysis + tasks
-    apiFetch(`/users/${username}/analysis`)
-      .then(r=>{ if(!r.ok) return r.json().then(e=>Promise.reject(e.detail)); return r.json() })
-      .then(d=>{
-        setData(d)
-        const recMode = d.recommended_mode || 'comfortable'; const recPlan = d.plans?.[recMode] || d.optimal_plan
-        return apiFetch(`/tasks/${username}?recommended_hours=${recPlan?.study??3.5}`)
-      })
-      .then(r=>r.json())
-      .then(t=>{ setTasks(t.tasks||[]); setProgress(t.progress||null) })
-      .catch(e=>{})
+        // Handle analysis
+        if (analysisRes.status === 'fulfilled') {
+          const r = analysisRes.value
+          if (!r.ok) {
+            const errText = await r.text()
+            if (errText.includes('Not enough data yet')) {
+              setError(errText)
+            } else {
+              throw new Error(errText || 'Analysis failed')
+            }
+          } else {
+            const d = await r.json()
+            setData(d)
 
-    // Fetch entries for StreakBadge
-    apiFetch(`/users/${username}/entries`)
-      .then(r => r.ok ? r.json() : [])
-      .then(d => setEntries(d.entries || []))
-      .catch(() => setEntries([]))
-      
-    setLoading(false)
+            // Fetch tasks based on plan
+            const recMode = d.recommended_mode || 'comfortable'
+            const recPlan = d.plans?.[recMode] || d.optimal_plan
+            const tasksRes = await apiFetch(`/tasks/${username}?recommended_hours=${recPlan?.study ?? 3.5}`)
+            const t = await tasksRes.json()
+            setTasks(t.tasks || [])
+            setProgress(t.progress || null)
+          }
+        } else {
+          throw analysisRes.reason
+        }
+
+        // Handle entries
+        if (entriesRes.status === 'fulfilled') {
+          const r = entriesRes.value
+          const d = r.ok ? await r.json() : { entries: [] }
+          setEntries(d.entries || [])
+        }
+
+      } catch (e) {
+        setError(e.message || 'Failed to load dashboard data')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
   }, [username])
 
   // Refetch tasks when user picks a different plan mode
