@@ -309,7 +309,9 @@ export default function Dashboard({ username, onNavigate }) {
     </div>
   )
 
-  const { baselines, chart_data, profile, plans, recommended_mode } = data
+  if (!data) return <div className="loading">Loading analysis...</div>
+
+  const { baselines = {}, chart_data = [], profile = {}, plans = {}, recommended_mode } = data
   const hour       = new Date().getHours()
   const greeting   = hour<12?"Good morning":hour<17?"Good afternoon":"Good evening"
   const today      = new Date().toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})
@@ -318,13 +320,14 @@ export default function Dashboard({ username, onNavigate }) {
   const barColor   = pct>=100?"var(--green)":pct>=50?"var(--blue)":"var(--amber)"
   const accents    = {recovery:"var(--blue)",comfortable:"var(--green)",challenge:"var(--purple)"}
 
-  // Sleep debt
-  const baselineSleep = chart_data.reduce((s,d)=>s+(d.avg_sleep_7??0),0)/Math.max(1,chart_data.length)
-  const sleepDebt     = Math.max(0,chart_data.slice(-7).reduce((s,d)=>s+Math.max(0,baselineSleep-(d.avg_sleep_7??0)),0))
-  const debtRounded   = Math.round(sleepDebt*10)/10
-  const daysToRecover = sleepDebt>0?Math.ceil(sleepDebt/0.5):0
-  const dColor = sleepDebt<2?"var(--green-txt)":sleepDebt<5?"var(--amber-txt)":"var(--red-txt)"
-  const dBg    = sleepDebt<2?"var(--green-bg)":sleepDebt<5?"var(--amber-bg)":"var(--red-bg)"
+  // Sleep debt (guard against empty data)
+  const baselineSleep = chart_data.length ? chart_data.reduce((s,d)=>s+(d.avg_sleep_7??0),0)/chart_data.length : 0
+  const recent7 = chart_data.slice(-7)
+  const sleepDebt = recent7.length ? Math.max(0, recent7.reduce((s,d)=>s+Math.max(0,baselineSleep-(d.avg_sleep_7??0)),0)) : 0
+  const debtRounded = Math.round(sleepDebt*10)/10
+  const daysToRecover = sleepDebt>0 ? Math.ceil(sleepDebt/0.5) : 0
+  const dColor = sleepDebt<2 ? "var(--green-txt)" : sleepDebt<5 ? "var(--amber-txt)" : "var(--red-txt)"
+  const dBg = sleepDebt<2 ? "var(--green-bg)" : sleepDebt<5 ? "var(--amber-bg)" : "var(--red-bg)"
 
   // Trends
   const last7=chart_data.slice(-7), prev7=chart_data.slice(-14,-7)
@@ -396,11 +399,17 @@ export default function Dashboard({ username, onNavigate }) {
       </div>
 
       {/* Chart — full width */}
-      <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",padding:"1rem"}}>
-        <div style={{height:360}}>
-          <TimeRangeChart data={chart_data} keyPerf="performance_score" keyBurnout="burnout_risk"/>
+      {chart_data && chart_data.length > 1 ? (
+        <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",padding:"1rem"}}>
+          <div style={{height:360}}>
+            <TimeRangeChart data={chart_data} keyPerf="performance_score" keyBurnout="burnout_risk"/>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",padding:"1rem", textAlign:"center", color:"var(--faint)"}}>
+          Log more entries to see trends
+        </div>
+      )}
 
       {/* Plans + stats side by side */}
       <div className="responsive-grid">
