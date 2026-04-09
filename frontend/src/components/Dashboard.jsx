@@ -347,7 +347,7 @@ export default function Dashboard({ username, onNavigate }) {
         </div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
           <StreakBadge entries={entries} />
-          {!entries.length && <div style={{fontSize:11,color:"var(--faint)"}}>No entries yet</div>}
+          <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:10}}>
             <span style={{fontSize:12,color:"var(--faint)",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"5px 10px",whiteSpace:"nowrap"}}>{today}</span>
             {pushStatus === "granted" ? (
               <span style={{fontSize:11,color:"var(--green-txt)",background:"var(--green-bg)",borderRadius:"999px",padding:"6px 10px",whiteSpace:"nowrap"}}>Reminders enabled</span>
