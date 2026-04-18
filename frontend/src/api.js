@@ -1,4 +1,5 @@
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000"
+const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 12000)
 
 function getToken() {
   return localStorage.getItem("pulse-token")
@@ -18,6 +19,12 @@ export function getSavedUser() {
   return localStorage.getItem("pulse-user")
 }
 
+function trackApiMetric(eventName, payload) {
+  if (typeof window === "undefined") return
+  if (typeof window.gtag !== "function") return
+  window.gtag("event", eventName, payload)
+}
+
 // Authenticated fetch — automatically attaches the JWT header
 export async function apiFetch(path, options = {}) {
   const token = getToken()
@@ -26,12 +33,40 @@ export async function apiFetch(path, options = {}) {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers || {}),
   }
-  const res = await fetch(`${BASE}${path}`, { ...options, headers })
-  if (res.status === 401) {
-    clearAuth()
-    window.location.reload()
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const started = performance.now()
+
+  try {
+    const res = await fetch(`${BASE}${path}`, { ...options, headers, signal: controller.signal })
+    const durationMs = Math.round(performance.now() - started)
+
+    trackApiMetric("api_request", {
+      endpoint: path,
+      method: options.method || "GET",
+      status: res.status,
+      duration_ms: durationMs,
+    })
+
+    if (res.status === 401) {
+      clearAuth()
+      window.location.reload()
+    }
+    return res
+  } catch (err) {
+    const durationMs = Math.round(performance.now() - started)
+    const reason = err?.name === "AbortError" ? "timeout" : "network"
+    trackApiMetric("api_error", {
+      endpoint: path,
+      method: options.method || "GET",
+      reason,
+      duration_ms: durationMs,
+    })
+    throw err
+  } finally {
+    clearTimeout(timeoutId)
   }
-  return res
 }
 
 // Auth calls (no token needed)

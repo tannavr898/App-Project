@@ -22,9 +22,21 @@ export default function UserSelect({ onSelect }) {
       if (!data.username || !data.token) {
         throw new Error("Invalid authentication response from server")
       }
+      if (typeof window !== "undefined" && typeof window.gtag === "function") {
+        window.gtag("event", "auth_success", {
+          method: mode,
+          username: data.username,
+        })
+      }
       saveAuth(data.username, data.token)
       onSelect(data.username)
     } catch (e) {
+      if (typeof window !== "undefined" && typeof window.gtag === "function") {
+        window.gtag("event", "auth_failure", {
+          method: mode,
+          reason: e.message || "unknown",
+        })
+      }
       setError(e.message)
     } finally {
       setLoading(false)

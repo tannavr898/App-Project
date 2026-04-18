@@ -141,9 +141,26 @@ export default function LogEntry({ username, onSaved }) {
         body: JSON.stringify({ username, date, sleep_hours: sleep, study_hours: study, training_hours: training, stress, fatigue, productivity: prod }),
       })
       if (!res.ok) throw new Error()
+      if (typeof window !== "undefined" && typeof window.gtag === "function") {
+        window.gtag("event", "entry_saved", {
+          username,
+          date,
+          sleep_hours: sleep,
+          study_hours: study,
+          training_hours: training,
+        })
+      }
       setSaved(true)
       setTimeout(() => onSaved(), 900)
-    } catch { setError("Could not save. Is the backend running?") }
+    } catch {
+      if (typeof window !== "undefined" && typeof window.gtag === "function") {
+        window.gtag("event", "entry_save_failed", {
+          username,
+          date,
+        })
+      }
+      setError("Could not save. Is the backend running?")
+    }
     finally   { setSaving(false) }
   }
 

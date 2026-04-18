@@ -66,13 +66,20 @@ export default function Tasks({ username }) {
   const [newCarryOver, setNewCarryOver] = useState(false)
   const [newCat,       setNewCat]       = useState("study")
   const [adding,       setAdding]       = useState(false)
+  const [actionPending, setActionPending] = useState(false)
   const [freeHours,    setFreeHours]    = useState(null)
 
-  const load = () => {
-    apiFetch(`/tasks/${username}?recommended_hours=${recHours}`)
-      .then(r => r.json())
-      .then(d => { setTasks(d.tasks || []); setProgress(d.progress || null); setLoading(false) })
-      .catch(() => setLoading(false))
+  const load = async () => {
+    try {
+      const r = await apiFetch(`/tasks/${username}?recommended_hours=${recHours}`)
+      const d = await r.json()
+      setTasks(d.tasks || [])
+      setProgress(d.progress || null)
+    } catch {
+      // no-op: component shows last known state
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -132,37 +139,60 @@ export default function Tasks({ username }) {
   }, [username])
 
   const addTask = async () => {
-    if (!newName.trim() || newHours <= 0) return
+    if (!newName.trim() || newHours <= 0 || adding || actionPending) return
     setAdding(true)
-    await apiFetch(`/tasks`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, name: newName.trim(), hours: newHours, carry_over: newCarryOver, category: newCat }),
-    })
-    setNewName(""); setNewHours(1); setNewCarryOver(false)
-    setAdding(false)
-    load()
+    try {
+      await apiFetch(`/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, name: newName.trim(), hours: newHours, carry_over: newCarryOver, category: newCat }),
+      })
+      setNewName("")
+      setNewHours(1)
+      setNewCarryOver(false)
+      await load()
+    } finally {
+      setAdding(false)
+    }
   }
 
   const toggleComplete = async task => {
-    await apiFetch(`/tasks/${task.completed ? "uncomplete" : "complete"}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, task_id: task.id }),
-    })
-    load()
+    if (actionPending) return
+    setActionPending(true)
+    try {
+      await apiFetch(`/tasks/${task.completed ? "uncomplete" : "complete"}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, task_id: task.id }),
+      })
+      await load()
+    } finally {
+      setActionPending(false)
+    }
   }
 
   const deleteTask = async id => {
-    await apiFetch(`/tasks/${username}/${id}`, { method: "DELETE" })
-    load()
+    if (actionPending) return
+    setActionPending(true)
+    try {
+      await apiFetch(`/tasks/${username}/${id}`, { method: "DELETE" })
+      await load()
+    } finally {
+      setActionPending(false)
+    }
   }
 
   const toggleCarryOver = async task => {
-    await apiFetch(`/tasks/toggle-carry-over`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, task_id: task.id }),
-    })
-    load()
+    if (actionPending) return
+    setActionPending(true)
+    try {
+      await apiFetch(`/tasks/toggle-carry-over`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, task_id: task.id }),
+      })
+      await load()
+    } finally {
+      setActionPending(false)
+    }
   }
 
   if (loading) return <div className="loading">Loading tasks…</div>

@@ -13,6 +13,13 @@ class PerformanceModel:
     """
     
     def __init__(self):
+        self.feature_columns = [
+            'avg_sleep_7',
+            'avg_stress_7',
+            'avg_fatigue_7',
+            'avg_load',
+            'self_rated_productivity',
+        ]
         self.scaler = StandardScaler()
         self.poly = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
         self.model = Ridge(alpha=1.0)
@@ -67,24 +74,21 @@ class PerformanceModel:
     
     def train(self, df):
         if df.empty:
-            print("No data to train on.")
             return
         df = self._add_performance_score(df)
         df = df.dropna().reset_index(drop=True)
         if df.empty:
-            print("No valid data after cleaning.")
             return
 
         # include the self‑rated productivity as a feature so the model can learn
         # personal "resilience" patterns (productive despite adversity)
-        X = df[['avg_sleep_7', 'avg_stress_7', 'avg_fatigue_7', 'avg_load', 'self_rated_productivity']]
+        X = df[self.feature_columns]
         y = df['performance_score']  # still using the engineered score as the target
 
         X_scaled = self.scaler.fit_transform(X)
         X_poly = self.poly.fit_transform(X_scaled)
 
         if len(X_poly) < 2:
-            print("Not enough data for training (need at least 2 samples).")
             return
 
         split_idx = int(len(X_poly) * 0.8)
@@ -93,24 +97,12 @@ class PerformanceModel:
         X_test = X_poly[split_idx:]
         y_train = y[:split_idx]
         y_test = y[split_idx:]
-        
-        print("Train Size: ", len(X_train))
-        print("Test Size: ", len(X_test))
 
         self.model.fit(X_train, y_train)
 
         if len(X_test) > 0:
-            y_pred = self.model.predict(X_test)
-            print("R2 Score:", r2_score(y_test, y_pred))
-            print("MSE:", mean_squared_error(y_test, y_pred))
-            
-        print("=== DEBUG ===")
-        print("Rows:", len(df))
-        print("Train:", len(X_train), "Test:", len(X_test))
-        print("Features:", X_train.shape[1])
-        print("Columns:", list(X.columns))
-        print("Performance range:",
-            y.min(), y.max())
+            _ = r2_score(y_test, self.model.predict(X_test))
+            _ = mean_squared_error(y_test, self.model.predict(X_test))
 
         self.trained = True
 
@@ -128,9 +120,7 @@ class PerformanceModel:
         if 'self_rated_productivity' not in features_dict and 'avg_productivity_7' in features_dict:
             features_dict['self_rated_productivity'] = features_dict['avg_productivity_7']
 
-        X = pd.DataFrame([features_dict])[ 
-            ['avg_sleep_7', 'avg_stress_7', 'avg_fatigue_7', 'avg_load', 'self_rated_productivity']
-        ]
+        X = pd.DataFrame([features_dict])[self.feature_columns]
     
         X_scaled = self.scaler.transform(X)
         X_poly = self.poly.transform(X_scaled)
@@ -140,6 +130,26 @@ class PerformanceModel:
         pred_clipped = np.clip(pred, 0, 100)
         
         return pred_clipped
+
+    # --------------------------------------------------
+    def predict_batch(self, features_list):
+        if not self.trained:
+            raise ValueError("Model not trained yet.")
+        if not features_list:
+            return np.array([])
+
+        normalized = []
+        for features in features_list:
+            item = dict(features)
+            if 'self_rated_productivity' not in item and 'avg_productivity_7' in item:
+                item['self_rated_productivity'] = item['avg_productivity_7']
+            normalized.append(item)
+
+        X = pd.DataFrame(normalized)[self.feature_columns]
+        X_scaled = self.scaler.transform(X)
+        X_poly = self.poly.transform(X_scaled)
+        preds = self.model.predict(X_poly)
+        return np.clip(preds, 0, 100)
 
     # --------------------------------------------------
     def add_performance_score(self, df):

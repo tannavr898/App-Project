@@ -1,16 +1,19 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
 import pandas as pd
 import os
-import hashlib
 import io
 import json
 import time
 import threading
+import logging
+import importlib
 import numpy as np
+from collections import defaultdict, deque
+from time import perf_counter
 from pywebpush import webpush, WebPushException
 
 from fastapi import UploadFile, File
@@ -22,21 +25,94 @@ from recommendation_engine import RecommendationEngine
 from task_manager import TaskManager
 
 # --------------------------------------------------
-# Cache
+# Cache + rate limiting
 # --------------------------------------------------
 _analysis_cache = {}
+_analysis_cache_lock = threading.Lock()
 
-def _csv_hash(username: str) -> str:
+
+def _csv_version(username: str) -> str:
     path = get_user_file(username)
     if not os.path.exists(path):
         return ""
-    with open(path, "rb") as f:
-        return hashlib.md5(f.read()).hexdigest()
+    stat = os.stat(path)
+    return f"{stat.st_mtime_ns}:{stat.st_size}"
+
+
+def _invalidate_user_cache(username: str):
+    with _analysis_cache_lock:
+        _analysis_cache.pop(username, None)
+
+
+class SlidingWindowRateLimiter:
+    def __init__(self, max_requests: int, window_seconds: int):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._requests = defaultdict(deque)
+        self._lock = threading.Lock()
+
+    def is_allowed(self, key: str) -> bool:
+        now = time.time()
+        cutoff = now - self.window_seconds
+        with self._lock:
+            q = self._requests[key]
+            while q and q[0] < cutoff:
+                q.popleft()
+            if len(q) >= self.max_requests:
+                return False
+            q.append(now)
+            return True
+
+
+_entry_limiter = SlidingWindowRateLimiter(
+    max_requests=int(os.environ.get("RATE_LIMIT_ENTRIES_MAX", "6")),
+    window_seconds=int(os.environ.get("RATE_LIMIT_ENTRIES_WINDOW_SEC", "60")),
+)
+_analysis_limiter = SlidingWindowRateLimiter(
+    max_requests=int(os.environ.get("RATE_LIMIT_ANALYSIS_MAX", "40")),
+    window_seconds=int(os.environ.get("RATE_LIMIT_ANALYSIS_WINDOW_SEC", "60")),
+)
+_auth_limiter = SlidingWindowRateLimiter(
+    max_requests=int(os.environ.get("RATE_LIMIT_AUTH_MAX", "15")),
+    window_seconds=int(os.environ.get("RATE_LIMIT_AUTH_WINDOW_SEC", "60")),
+)
+_import_limiter = SlidingWindowRateLimiter(
+    max_requests=int(os.environ.get("RATE_LIMIT_IMPORT_MAX", "4")),
+    window_seconds=int(os.environ.get("RATE_LIMIT_IMPORT_WINDOW_SEC", "60")),
+)
+
+
+def _rate_limit_key(request: Request, scope: str, user_hint: str = "") -> str:
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    ip = forwarded or (request.client.host if request.client else "unknown")
+    hint = user_hint.strip().lower()
+    return f"{scope}:{ip}:{hint}"
 
 # --------------------------------------------------
 # App + CORS
 # --------------------------------------------------
 app = FastAPI(title="Student Wellness API")
+
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("pulse.api")
+
+sentry_dsn = os.environ.get("SENTRY_DSN", "").strip()
+if sentry_dsn:
+    try:
+        sentry_sdk = importlib.import_module("sentry_sdk")
+        fastapi_integration = importlib.import_module("sentry_sdk.integrations.fastapi")
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            integrations=[fastapi_integration.FastApiIntegration()],
+            traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+            environment=os.environ.get("SENTRY_ENVIRONMENT", "production"),
+        )
+        logger.info("Sentry initialized")
+    except Exception as exc:
+        logger.warning("Sentry disabled: %s", exc)
 
 default_origins = {
     "https://pulsewellness.vercel.app",
@@ -62,6 +138,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def telemetry_middleware(request: Request, call_next):
+    started = perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed_ms = (perf_counter() - started) * 1000
+        logger.exception(
+            "request_failed method=%s path=%s duration_ms=%.2f",
+            request.method,
+            request.url.path,
+            elapsed_ms,
+        )
+        raise
+
+    elapsed_ms = (perf_counter() - started) * 1000
+    response.headers["x-response-time-ms"] = f"{elapsed_ms:.2f}"
+    logger.info(
+        "request method=%s path=%s status=%s duration_ms=%.2f",
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed_ms,
+    )
+    return response
 
 USERS_DIR = "users"
 os.makedirs(USERS_DIR, exist_ok=True)
@@ -290,9 +393,13 @@ def _startup_event():
 
 
 def build_analysis(username: str) -> dict:
-    cache_key = (username, _csv_hash(username))
-    if cache_key in _analysis_cache:
-        return _analysis_cache[cache_key]
+    version = _csv_version(username)
+    with _analysis_cache_lock:
+        cached = _analysis_cache.get(username)
+        if cached and cached.get("version") == version:
+            return cached["result"]
+
+    started = perf_counter()
 
     data = StudentData(get_user_file(username))
     df   = data.get_dataframe()
@@ -341,14 +448,25 @@ def build_analysis(username: str) -> dict:
         "total_entries":    len(df),
     }
 
-    _analysis_cache[cache_key] = result
+    with _analysis_cache_lock:
+        _analysis_cache[username] = {"version": version, "result": result}
+
+    logger.info(
+        "analysis_built username=%s entries=%s duration_ms=%.2f",
+        username,
+        len(df),
+        (perf_counter() - started) * 1000,
+    )
     return result
 
 # --------------------------------------------------
 # Auth routes
 # --------------------------------------------------
 @app.post("/auth/register")
-def register(req: RegisterRequest):
+def register(req: RegisterRequest, request: Request):
+    rl_key = _rate_limit_key(request, "auth", req.username)
+    if not _auth_limiter.is_allowed(rl_key):
+        raise HTTPException(status_code=429, detail="Too many auth attempts. Please wait and try again.")
     try:
         user  = register_user(req.username, req.password)
         token = create_token(user["username"])
@@ -361,7 +479,11 @@ def register(req: RegisterRequest):
 
 
 @app.post("/auth/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, request: Request):
+    rl_key = _rate_limit_key(request, "auth", req.username)
+    if not _auth_limiter.is_allowed(rl_key):
+        raise HTTPException(status_code=429, detail="Too many auth attempts. Please wait and try again.")
+
     user = authenticate_user(req.username, req.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
@@ -415,7 +537,7 @@ def reset_dev_data(current_user: str = Depends(get_current_user)):
     """Re-seed the dev account with fresh sample data."""
     if current_user != "dev":
         raise HTTPException(status_code=403, detail="Dev only endpoint")
-    _analysis_cache.clear()
+    _invalidate_user_cache("dev")
     _seed_dev_data()
     return {"message": "Dev data reset with 30 fresh sample days"}
 
@@ -478,8 +600,14 @@ def send_test_push(
 @app.get("/users/{username}/analysis")
 def get_analysis(
     username: str,
+    request: Request,
     current_user: str = Depends(get_current_user),
 ):
+    if username != current_user:
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    rl_key = _rate_limit_key(request, "analysis", username)
+    if not _analysis_limiter.is_allowed(rl_key):
+        raise HTTPException(status_code=429, detail="Too many analysis requests. Please wait and retry.")
     if not user_exists(username):
         raise HTTPException(status_code=404, detail="User not found")
     if sum(1 for _ in open(get_user_file(username))) < 3:
@@ -492,6 +620,8 @@ def get_entries(
     username: str,
     current_user: str = Depends(get_current_user),
 ):
+    if username != current_user:
+        raise HTTPException(status_code=403, detail="Username mismatch")
     if not user_exists(username):
         raise HTTPException(status_code=404, detail="User not found")
     df = pd.read_csv(get_user_file(username))
@@ -502,9 +632,16 @@ def get_entries(
 @app.post("/users/{username}/import")
 async def import_csv(
     username: str,
+    request: Request,
     file: UploadFile = File(...),
     current_user: str = Depends(get_current_user),
 ):
+    if username != current_user:
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    rl_key = _rate_limit_key(request, "import", username)
+    if not _import_limiter.is_allowed(rl_key):
+        raise HTTPException(status_code=429, detail="Too many import attempts. Please wait and retry.")
+
     required_cols = {
         "date", "sleep_hours", "study_hours",
         "training_hours", "stress", "fatigue", "productivity",
@@ -528,7 +665,7 @@ async def import_csv(
     else:
         imported_df.to_csv(user_file, index=False)
 
-    _analysis_cache.clear()
+    _invalidate_user_cache(username)
     return {"message": "Imported successfully", "rows": len(imported_df)}
 
 # --------------------------------------------------
@@ -537,8 +674,15 @@ async def import_csv(
 @app.post("/entries")
 def add_entry(
     entry: NewEntry,
+    request: Request,
     current_user: str = Depends(get_current_user),
 ):
+    if entry.username != current_user:
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    rl_key = _rate_limit_key(request, "entries", entry.username)
+    if not _entry_limiter.is_allowed(rl_key):
+        raise HTTPException(status_code=429, detail="Too many entry updates. Please wait and retry.")
+
     user_file = get_user_file(entry.username)
 
     if os.path.exists(user_file):
@@ -557,13 +701,31 @@ def add_entry(
     }
 
     # Remove any existing entry for the same date
+    existing_same_day = None
     if not df.empty and "date" in df.columns:
+        same_day = df[df["date"].astype(str).str[:10] == str(entry.date)[:10]]
+        if not same_day.empty:
+            existing_same_day = same_day.iloc[-1].to_dict()
         df = df[df["date"].astype(str).str[:10] != str(entry.date)[:10]]
+
+    if existing_same_day is not None:
+        unchanged = (
+            str(existing_same_day.get("date", ""))[:10] == str(entry.date)[:10]
+            and float(existing_same_day.get("sleep_hours", -1)) == float(entry.sleep_hours)
+            and float(existing_same_day.get("study_hours", -1)) == float(entry.study_hours)
+            and float(existing_same_day.get("training_hours", -1)) == float(entry.training_hours)
+            and int(existing_same_day.get("stress", -1)) == int(entry.stress)
+            and int(existing_same_day.get("fatigue", -1)) == int(entry.fatigue)
+            and int(existing_same_day.get("productivity", -1)) == int(entry.productivity)
+        )
+        if unchanged:
+            logger.info("entry_noop username=%s date=%s", entry.username, entry.date)
+            return {"message": "Entry unchanged", "total_entries": len(df) + 1}
 
     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
     df = df.sort_values("date").reset_index(drop=True)
     df.to_csv(user_file, index=False)
-    _analysis_cache.clear()
+    _invalidate_user_cache(entry.username)
 
     return {"message": "Entry saved", "total_entries": len(df)}
 

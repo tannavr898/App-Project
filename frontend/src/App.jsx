@@ -63,6 +63,33 @@ export default function App() {
   const [page, setPage] = useState("dashboard")
   const [dark, setDark] = useState(() => localStorage.getItem("pulse-theme") === "dark")
   const [isMobile, setIsMobile] = useState(false)
+  const gaMeasurementId = import.meta.env.VITE_GA_MEASUREMENT_ID
+
+  useEffect(() => {
+    if (!gaMeasurementId) return
+    if (typeof window === "undefined") return
+    if (window.gtag) return
+
+    const script = document.createElement("script")
+    script.async = true
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`
+    document.head.appendChild(script)
+
+    window.dataLayer = window.dataLayer || []
+    window.gtag = function gtag(){ window.dataLayer.push(arguments) }
+    window.gtag("js", new Date())
+    window.gtag("config", gaMeasurementId, { send_page_view: false })
+  }, [gaMeasurementId])
+
+  useEffect(() => {
+    if (!gaMeasurementId || typeof window === "undefined" || typeof window.gtag !== "function") return
+    window.gtag("event", "page_view", {
+      page_title: page,
+      page_path: `/${page}`,
+      page_location: window.location.href,
+      user_id: user || "anonymous",
+    })
+  }, [gaMeasurementId, page, user])
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 640)

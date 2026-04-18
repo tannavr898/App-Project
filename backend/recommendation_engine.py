@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import os
 
 
 MODE_CONFIGS = {
@@ -241,84 +242,114 @@ class RecommendationEngine:
         w_burnout    = cfg['w_burnout']
         train_bonus  = cfg['training_bonus']
 
-        for _ in range(cfg['iterations']):
-            sleep    = np.random.uniform(sleep_min, sleep_max)
-            study    = np.random.uniform(cfg['study_min'], cfg['study_max'])
-            training = np.random.uniform(cfg['train_min'], cfg['train_max'])
+        iter_cap = int(os.environ.get("MONTE_CARLO_ITER_CAP", "220"))
+        iteration_budget = min(cfg['iterations'], max(40, iter_cap))
+        draw_count = max(iteration_budget * 3, 120)
 
-            if sleep + study + training + fixed_commitments_hours > 24:
+        sampled_sleep = np.random.uniform(sleep_min, sleep_max, draw_count)
+        sampled_study = np.random.uniform(cfg['study_min'], cfg['study_max'], draw_count)
+        sampled_training = np.random.uniform(cfg['train_min'], cfg['train_max'], draw_count)
+
+        valid_idx = []
+        for idx in range(draw_count):
+            sleep = sampled_sleep[idx]
+            study = sampled_study[idx]
+            training = sampled_training[idx]
+            load = study + training
+
+            if sleep + load + fixed_commitments_hours > 24:
+                continue
+            if cfg['label'] != "Recovery" and load < 1.5:
+                continue
+            if cfg['label'] == "Challenge" and load < max(base_load + 1.0, avg_load + 1.0):
                 continue
 
-            if cfg['label'] != "Recovery" and study + training < 1.5:
-                continue
+            valid_idx.append(idx)
+            if len(valid_idx) >= iteration_budget:
+                break
 
-            if cfg['label'] == "Challenge" and study + training < max(base_load + 1.0, avg_load + 1.0):
-                continue
+        if not valid_idx:
+            return None
 
-            features      = self.simulate_next_day(df, sleep, study, training)
-            pred_perf     = self.model.predict(features)
-            pred_burnout  = self.estimate_burnout(features)
+        candidates = []
+        for idx in valid_idx:
+            sleep = float(sampled_sleep[idx])
+            study = float(sampled_study[idx])
+            training = float(sampled_training[idx])
+            features = self.simulate_next_day(df, sleep, study, training)
+            candidates.append({
+                "sleep": sleep,
+                "study": study,
+                "training": training,
+                "load": study + training,
+                "features": features,
+            })
+
+        pred_perf_batch = self.model.predict_batch([c["features"] for c in candidates])
+        pred_burnout_batch = np.array([self.estimate_burnout(c["features"]) for c in candidates])
+
+        for idx, candidate in enumerate(candidates):
+            sleep = candidate["sleep"]
+            study = candidate["study"]
+            training = candidate["training"]
+            load = candidate["load"]
+            pred_perf = float(pred_perf_batch[idx])
+            pred_burnout = float(pred_burnout_batch[idx])
 
             s_sleep = self.sleep_score(sleep, avg_sleep, base_sleep)
-            s_load  = self.workload_score(
-                study + training, avg_study, avg_training, base_load, cfg['label']
-            )
+            s_load  = self.workload_score(load, avg_study, avg_training, base_load, cfg['label'])
 
             score = (
-                pred_perf    * w_perf  +
-                s_load       * w_load  +
-                s_sleep      * w_sleep_w
+                pred_perf * w_perf +
+                s_load * w_load +
+                s_sleep * w_sleep_w
             )
             score -= pred_burnout * w_burnout
-            score += training     * train_bonus
+            score += training * train_bonus
 
-            # Stay near baselines (scaled by mode — challenge allows more drift)
             baseline_pull = 0.6 if cfg['label'] == "Challenge" else 2.2
-            score -= abs(sleep - base_sleep)          * baseline_pull
-            score -= abs((study + training) - base_load) * (baseline_pull * 0.75)
+            score -= abs(sleep - base_sleep) * baseline_pull
+            score -= abs(load - base_load) * (baseline_pull * 0.75)
 
             if cfg['label'] == "Challenge":
-                score += max(0, (study + training) - base_load) * 2.5
+                score += max(0, load - base_load) * 2.5
             elif cfg['label'] == "Recovery":
-                score -= max(0, (study + training) - base_load) * 4
+                score -= max(0, load - base_load) * 4
                 score += max(0, base_sleep - sleep) * 4
 
-            # Situational adjustments (same logic, consistent across all modes)
             if avg_sleep < 6.5:
                 if sleep > base_sleep:
                     score += (sleep - base_sleep) * 5
                 else:
                     score -= (base_sleep - sleep) * 5
-                load = study + training
                 if load > base_load:
                     score -= (load - base_load) * 3
 
             if avg_load > base_load:
-                load = study + training
                 if load < base_load:
                     score += (base_load - load) * 3
                 else:
                     score -= (load - base_load) * 4
             else:
-                score += ((study + training) - base_load) * 2
+                score += (load - base_load) * 2
 
             if avg_fatigue > base_fatigue:
                 if sleep > base_sleep:
                     score += (sleep - base_sleep) * 4
                 else:
                     score -= (base_sleep - sleep) * 2
-                if (study + training) > base_load:
-                    score -= ((study + training) - base_load) * 3
+                if load > base_load:
+                    score -= (load - base_load) * 3
             else:
-                score += ((study + training) - base_load) * 1
+                score += (load - base_load) * 1
 
             if avg_stress > base_stress:
                 if sleep < base_sleep:
                     score -= (base_sleep - sleep) * 3
-                if (study + training) > base_load:
-                    score -= ((study + training) - base_load) * 2
+                if load > base_load:
+                    score -= (load - base_load) * 2
             else:
-                score += ((study + training) - base_load) * 0.5
+                score += (load - base_load) * 0.5
 
             if score > best_score:
                 best_score = score
