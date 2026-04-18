@@ -1,4 +1,4 @@
-import { apiFetch, clearApiCache } from "../api"
+import { apiFetch, clearApiCache, getCachedJson } from "../api"
 import { useState, useEffect } from "react"
 
 const getLocalDate = date => {
@@ -54,11 +54,15 @@ function WeeklyBar({ date, rate }) {
 }
 
 export default function Tasks({ username }) {
-  const [tasks,    setTasks]    = useState([])
-  const [progress, setProgress] = useState(null)
-  const [recHours, setRecHours] = useState(3.5)
+  const cachedAnalysis = getCachedJson(`analysis:${username}`, 90000)
+  const initialRecHours = cachedAnalysis?.optimal_plan?.study ?? 3.5
+  const cachedTasks = getCachedJson(`tasks:${username}:${initialRecHours}`, 90000)
+
+  const [tasks,    setTasks]    = useState(cachedTasks?.tasks || [])
+  const [progress, setProgress] = useState(cachedTasks?.progress || null)
+  const [recHours, setRecHours] = useState(initialRecHours)
   const [history,  setHistory]  = useState({})
-  const [loading,  setLoading]  = useState(true)
+  const [loading,  setLoading]  = useState(!(cachedTasks?.tasks || []).length)
   const [filter,   setFilter]   = useState("all")
 
   const [newName,      setNewName]      = useState("")
@@ -73,7 +77,7 @@ export default function Tasks({ username }) {
     try {
       const r = await apiFetch(`/tasks/${username}?recommended_hours=${recHours}`, {
         cacheKey: `tasks:${username}:${recHours}`,
-        cacheTtlMs: 45000,
+        cacheTtlMs: 90000,
       })
       const d = await r.json()
       setTasks(d.tasks || [])
@@ -91,7 +95,7 @@ export default function Tasks({ username }) {
     
     apiFetch(`/users/${username}/analysis`, {
       cacheKey: `analysis:${username}`,
-      cacheTtlMs: 60000,
+      cacheTtlMs: 90000,
     })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
@@ -110,14 +114,14 @@ export default function Tasks({ username }) {
       .catch(() => {})
     apiFetch(`/tasks/${username}/history`, {
       cacheKey: `task-history:${username}`,
-      cacheTtlMs: 60000,
+      cacheTtlMs: 90000,
     })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.history) setHistory(d.history) })
       .catch(() => {})
     apiFetch(`/tasks/${username}/prefill`, {
       cacheKey: `task-prefill:${username}`,
-      cacheTtlMs: 60000,
+      cacheTtlMs: 90000,
     })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.free_hours_yesterday != null) setFreeHours(d.free_hours_yesterday) })
@@ -137,7 +141,7 @@ export default function Tasks({ username }) {
       if (selectedMode) {
         apiFetch(`/users/${username}/analysis`, {
           cacheKey: `analysis:${username}`,
-          cacheTtlMs: 60000,
+          cacheTtlMs: 90000,
         })
           .then(r => r.ok ? r.json() : null)
           .then(d => {

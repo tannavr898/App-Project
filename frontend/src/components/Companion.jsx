@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { apiFetch } from "../api"
+import { apiFetch, getCachedJson } from "../api"
 import "../styles/Companion.css"
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
@@ -56,9 +56,20 @@ function ScoreCard({ label, value, tone, helper, percent }) {
   )
 }
 
+function SectionTitle({ label, help }) {
+  return (
+    <div className="companion-section-title">
+      <span>{label}</span>
+      <HelpIcon text={help} />
+    </div>
+  )
+}
+
 export default function Companion({ username, variant = "full", onNavigate }) {
-  const [companion, setCompanion] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const cacheKey = `companion:${username}`
+  const cachedCompanion = getCachedJson(cacheKey, 120000)
+  const [companion, setCompanion] = useState(cachedCompanion)
+  const [loading, setLoading] = useState(!cachedCompanion)
   const [error, setError] = useState(null)
   const [pollingEnabled, setPollingEnabled] = useState(true)
 
@@ -69,9 +80,9 @@ export default function Companion({ username, variant = "full", onNavigate }) {
       if (!pollingEnabled) return
       setError(null)
       const response = await apiFetch(`/companion/${username}/summary`, {
-        timeoutMs: 20000,
-        cacheKey: `companion:${username}`,
-        cacheTtlMs: 45000,
+        timeoutMs: 45000,
+        cacheKey,
+        cacheTtlMs: 120000,
       })
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
@@ -86,7 +97,9 @@ export default function Companion({ username, variant = "full", onNavigate }) {
       const message = err?.name === "AbortError"
         ? "Companion is taking longer than expected"
         : (err?.message || "Failed to load companion")
-      setError(message)
+      if (!companion) {
+        setError(message)
+      }
     } finally {
       setLoading(false)
     }
@@ -94,7 +107,7 @@ export default function Companion({ username, variant = "full", onNavigate }) {
 
   useEffect(() => {
     setPollingEnabled(true)
-    setLoading(true)
+    setLoading(!cachedCompanion)
     fetchCompanion()
   }, [username])
 
@@ -158,11 +171,11 @@ export default function Companion({ username, variant = "full", onNavigate }) {
   const trend = performance_influence?.trend
   const trendText = trendLabel(trend)
   const trendClass = trendTone(trend)
-
   const renderStageArt = () => (
     <div className="companion-art">
       <span className="companion-art-orbit companion-art-orbit--a" />
       <span className="companion-art-orbit companion-art-orbit--b" />
+      <span className={`companion-energy companion-energy--${trendClass}`} />
       <span className="companion-art-petal companion-art-petal--1" />
       <span className="companion-art-petal companion-art-petal--2" />
       <span className="companion-art-petal companion-art-petal--3" />
@@ -170,7 +183,7 @@ export default function Companion({ username, variant = "full", onNavigate }) {
       <span className="companion-art-petal companion-art-petal--5" />
       <span className="companion-art-petal companion-art-petal--6" />
       <span className="companion-art-core">
-        <span>{visual_stage}</span>
+        <span>{level_name}</span>
       </span>
       <span className="companion-art-spark companion-art-spark--1" />
       <span className="companion-art-spark companion-art-spark--2" />
@@ -184,7 +197,6 @@ export default function Companion({ username, variant = "full", onNavigate }) {
           <div className="companion-stage companion-stage--summary">
             <div className="companion-stage-glow" />
             {renderStageArt()}
-            <div className="heartbeat">💓</div>
           </div>
 
           <div className="companion-copy">
@@ -197,7 +209,10 @@ export default function Companion({ username, variant = "full", onNavigate }) {
               <span className="companion-mood-emoji">{mood_emoji}</span>
               <span>{moodLabel}</span>
               <span className="companion-dot">•</span>
-              <span>Lv {level}</span>
+              <span>
+                Lv {level}
+                <HelpIcon text="Levels increase as your total companion XP grows. Later levels unlock more advanced stages and visuals." />
+              </span>
             </p>
           </div>
 
@@ -216,7 +231,10 @@ export default function Companion({ username, variant = "full", onNavigate }) {
 
         <div className="companion-progress-block">
           <div className="companion-progress-head">
-            <span>Progress</span>
+            <span>
+              Progress
+              <HelpIcon text="This bar shows your progress within the current level. It fills as you earn more companion XP." />
+            </span>
             <span>{xpProgress.toFixed(0)}%</span>
           </div>
           <div className="xp-bar-container">
@@ -241,7 +259,6 @@ export default function Companion({ username, variant = "full", onNavigate }) {
         <div className="companion-stage companion-stage--full">
           <div className="companion-stage-glow" />
           {renderStageArt()}
-          <div className="heartbeat">💓</div>
         </div>
 
         <div className="companion-copy companion-copy--full">
@@ -267,7 +284,8 @@ export default function Companion({ username, variant = "full", onNavigate }) {
               </button>
             )}
             <div className={`companion-trend companion-trend--${trendClass}`}>
-              {trendText}
+              <span>Trend: {trendText}</span>
+              <HelpIcon text="Trend reflects whether your recent performance has been moving up, staying steady, or slipping." />
             </div>
           </div>
         </div>
@@ -285,7 +303,10 @@ export default function Companion({ username, variant = "full", onNavigate }) {
       <div className="companion-grid">
         <div className="companion-column">
           <div className="companion-panel">
-            <div className="companion-panel-title">Level progress</div>
+            <SectionTitle
+              label="Level progress"
+              help="The companion advances through levels as XP accumulates. Each level contains multiple visual stages."
+            />
             <div className="companion-xp-row">
               <span>{xpLabel}</span>
               <span>{xpHelper}</span>
@@ -296,7 +317,10 @@ export default function Companion({ username, variant = "full", onNavigate }) {
           </div>
 
           <div className="companion-panel">
-            <div className="companion-panel-title">Your influence</div>
+            <SectionTitle
+              label="Your influence"
+              help="Performance rises when the week is going well. Burnout rises when recovery and stress start to slip."
+            />
             <div className="companion-score-grid">
               <ScoreCard
                 label="Performance"
@@ -313,13 +337,19 @@ export default function Companion({ username, variant = "full", onNavigate }) {
                 percent={burnoutScore}
               />
             </div>
-            <div className={`companion-trend companion-trend--${trendClass}`}>Trend: {trendText}</div>
+            <div className={`companion-trend companion-trend--${trendClass}`}>
+              <span>Trend: {trendText}</span>
+              <HelpIcon text="Trend is computed from the recent performance trend, not just today’s entry." />
+            </div>
           </div>
         </div>
 
         <div className="companion-column">
           <div className="companion-panel companion-panel--soft">
-            <div className="companion-panel-title">Daily snapshot</div>
+            <SectionTitle
+              label="Daily snapshot"
+              help="This shows the current streak, recency of your last log, and how close you are to the next level." 
+            />
             <div className="companion-bullet-list">
               <div>
                 <span>Current streak</span>
@@ -341,7 +371,10 @@ export default function Companion({ username, variant = "full", onNavigate }) {
           </div>
 
           <div className="companion-panel companion-panel--soft">
-            <div className="companion-panel-title">How it feels</div>
+            <SectionTitle
+              label="How it feels"
+              help="The companion’s mood reflects your recent trend and how your latest entry affected it."
+            />
             <div className="companion-feeling">
               <span className="companion-mood-emoji companion-mood-emoji--large">{mood_emoji}</span>
               <div>

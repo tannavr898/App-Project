@@ -251,3 +251,14 @@ export async function register(username, password) {
   if (!res.ok) throw new Error(data.detail || "Registration failed")
   return data
 }
+
+export function getCachedJson(cacheKey, cacheTtlMs) {
+  const response = readCachedResponse(cacheKey, cacheTtlMs)
+  if (!response) return null
+
+  try {
+    return JSON.parse(response.bodyText)
+  } catch {
+    return null
+  }
+}

@@ -99,23 +99,27 @@ MILESTONE_XP = {
 LEVEL_THRESHOLDS = {
     1: 0,      # Seed: starts at 0
     2: 50,     # Sprout: hit around day 3-5 with daily logging
-    3: 120,    # Young Plant: hit around day 7 with daily + tasks
-    4: 220,    # Blooming: week 2
-    5: 400,    # Flourishing: week 3+
-    6: 650,    # Canopy: deeper consistency
-    7: 950,    # Wildwood: sustained habit lock-in
-    8: 1350,   # Evergreen: long-term mastery
+    3: 120,    # Bud: first meaningful habit lock-in
+    4: 220,    # Flower: visible momentum
+    5: 400,    # Tree: stable weekly rhythm
+    6: 650,    # Small Woods: deeper consistency
+    7: 950,    # Forest Pond: stable ecosystem
+    8: 1350,   # Forest Lake: rich, self-sustaining rhythm
+    9: 1850,   # River: flows through change
+    10: 2600,  # Amazon Rainforest: mastery
 }
 
 LEVEL_NAMES = {
     1: "Seed",
     2: "Sprout",
-    3: "Young Plant",
-    4: "Blooming",
-    5: "Flourishing",
-    6: "Canopy",
-    7: "Wildwood",
-    8: "Evergreen",
+    3: "Bud",
+    4: "Flower",
+    5: "Tree",
+    6: "Small Woods",
+    7: "Forest Pond",
+    8: "Forest Lake",
+    9: "River",
+    10: "Amazon Rainforest",
 }
 
 # Mood states (thresholds)
@@ -130,12 +134,14 @@ MOOD_THRESHOLDS = {
 VISUAL_STAGES = {
     1: ["🌰", "🌰✨", "🌱", "🌱✨"],
     2: ["🌿", "🌿✨", "🌿🌿", "🌸"],
-    3: ["🪴", "🪴✨", "🪴🌸", "🌸🌸"],
-    4: ["🌸🌸✨", "🌻", "🌻✨", "🌺"],
-    5: ["🌺✨", "🌺🌺", "🌺🌺✨", "🎄"],
-    6: ["🌳", "🌳✨", "🌳🌿", "🌳🌟"],
-    7: ["🌲", "🌲✨", "🌲🌿", "🌲🌟"],
-    8: ["🌌", "🌟", "✨🌲", "💫🌿"],
+    3: ["🪴", "🪴✨", "🌷", "🌷✨"],
+    4: ["🌼", "🌼✨", "🌻", "🌻✨"],
+    5: ["🌳", "🌳✨", "🌳🌿", "🌳🌟"],
+    6: ["🌲", "🌲✨", "🌲🌿", "🌲🌟"],
+    7: ["🌳💧", "🌿💧", "🌲💧", "🌊🌿"],
+    8: ["🌳🌊", "🌿🌊", "🌲🌊", "💙🌿"],
+    9: ["🫧", "🌊", "🌿", "🏞️"],
+    10: ["🌿", "🌳", "🌴", "🌎"],
 }
 
 # Companion mini-mood emojis (based on today's single entry)

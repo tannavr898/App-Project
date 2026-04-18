@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react"
-import { apiFetch, registerPushSubscription } from "../api"
+import { apiFetch, getCachedJson, registerPushSubscription } from "../api"
 import StreakBadge from "./StreakBadge"
 import Companion from "./Companion"
 
@@ -227,16 +227,33 @@ function ModeCard({ plan, isActive, isRecommended, accent, onClick }) {
 }
 
 export default function Dashboard({ username, onNavigate }) {
-  const [data,         setData]         = useState(null)
+  const cachedAnalysis = getCachedJson(`analysis:${username}`, 60000)
+  const [data,         setData]         = useState(cachedAnalysis)
   const [tasks,        setTasks]        = useState([])
   const [progress,     setProgress]     = useState(null)
-  const [loading,      setLoading]      = useState(true)
+  const [loading,      setLoading]      = useState(!cachedAnalysis)
   const [error,        setError]        = useState(null)
   const [isFirstRun,   setIsFirstRun]   = useState(false)
   const [selectedMode, setSelectedMode] = useState(() => localStorage.getItem(`pulse-plan-${username}`))
   const [pushStatus,   setPushStatus]   = useState("default")
   const [pushLoading,  setPushLoading]  = useState(false)
   const [entries,      setEntries]      = useState([])
+
+  useEffect(() => {
+    if (!cachedAnalysis) return
+    const mode = selectedMode || cachedAnalysis.recommended_mode || "comfortable"
+    const plan = cachedAnalysis.plans?.[mode] || cachedAnalysis.optimal_plan
+    const recHours = plan?.study ?? 3.5
+    const cachedTasks = getCachedJson(`tasks:${username}:${recHours}`, 45000)
+    const cachedEntries = getCachedJson(`entries:${username}`, 45000)
+    if (cachedTasks) {
+      setTasks(cachedTasks.tasks || [])
+      setProgress(cachedTasks.progress || null)
+    }
+    if (cachedEntries) {
+      setEntries(cachedEntries.entries || [])
+    }
+  }, [cachedAnalysis, selectedMode, username])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -265,16 +282,18 @@ export default function Dashboard({ username, onNavigate }) {
     let cancelled = false
 
     const loadData = async () => {
-      setLoading(true)
+      if (!cachedAnalysis) {
+        setLoading(true)
+      }
       setError(null)
       setIsFirstRun(false)
       try {
         const fetchAnalysis = async () => {
           for (let attempt = 0; attempt < 12; attempt += 1) {
             const r = await apiFetch(`/users/${username}/analysis`, {
-              timeoutMs: 30000,
+              timeoutMs: 45000,
               cacheKey: `analysis:${username}`,
-              cacheTtlMs: 60000,
+              cacheTtlMs: 90000,
             })
             if (r.status === 202) {
               await new Promise(resolve => setTimeout(resolve, 1200))
@@ -295,7 +314,7 @@ export default function Dashboard({ username, onNavigate }) {
         const entriesPromise = apiFetch(`/users/${username}/entries`, {
           timeoutMs: 20000,
           cacheKey: `entries:${username}`,
-          cacheTtlMs: 45000,
+          cacheTtlMs: 90000,
         })
         const d = await fetchAnalysis()
         if (cancelled) return
@@ -307,7 +326,7 @@ export default function Dashboard({ username, onNavigate }) {
         const tasksRes = await apiFetch(`/tasks/${username}?recommended_hours=${recPlan?.study ?? 3.5}`, {
           timeoutMs: 20000,
           cacheKey: `tasks:${username}:${recPlan?.study ?? 3.5}`,
-          cacheTtlMs: 45000,
+          cacheTtlMs: 90000,
         })
         const t = await tasksRes.json()
         if (cancelled) return
@@ -325,6 +344,10 @@ export default function Dashboard({ username, onNavigate }) {
         const message = e?.name === 'AbortError'
           ? 'Request timed out while loading dashboard data. Please retry in a moment.'
           : (e?.message || 'Failed to load dashboard data')
+        if (cachedAnalysis) {
+          console.warn("Dashboard refresh failed; keeping cached data.", message)
+          return
+        }
         if (message.includes('Not enough data yet')) {
           setIsFirstRun(true)
           setError(null)
@@ -352,7 +375,7 @@ export default function Dashboard({ username, onNavigate }) {
     const recHours = plan?.study ?? 3.5
     apiFetch(`/tasks/${username}?recommended_hours=${recHours}`, {
       cacheKey: `tasks:${username}:${recHours}`,
-      cacheTtlMs: 45000,
+      cacheTtlMs: 90000,
     })
       .then(r => r.json())
       .then(t => { setTasks(t.tasks||[]); setProgress(t.progress||null) })
