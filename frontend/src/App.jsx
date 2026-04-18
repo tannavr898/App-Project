@@ -168,8 +168,11 @@ export default function App() {
         <div className="app">
           <aside className="sidebar">
             <div className="logo">
-              Pulse
-              <span>student wellness</span>
+              <img src="/favicon.svg" alt="Pulse" className="logo-img" />
+              <div>
+                Pulse
+                <span>student wellness</span>
+              </div>
             </div>
             <nav>
               {[

@@ -383,7 +383,8 @@ body {
     padding: 6px 0;
   }
 }
-.logo { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.logo { display: flex; align-items: center; gap: 12px; font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.logo-img { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
 .logo span { display: block; font-size: 11px; color: var(--faint); font-weight: 400; margin-top: 1px; }
 
 nav { display: flex; flex-direction: column; gap: 2px; }
