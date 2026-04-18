@@ -134,6 +134,26 @@ def ensure_database() -> None:
                     username TEXT PRIMARY KEY,
                     last_sent INTEGER NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS companion_state (
+                    username TEXT PRIMARY KEY,
+                    level INTEGER NOT NULL DEFAULT 1,
+                    xp_current INTEGER NOT NULL DEFAULT 0,
+                    xp_threshold INTEGER NOT NULL DEFAULT 0,
+                    mood TEXT NOT NULL DEFAULT "healthy",
+                    evolved_at TEXT,
+                    last_updated_at TEXT NOT NULL,
+                    FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS companion_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    xp_gained INTEGER,
+                    triggered_at TEXT NOT NULL,
+                    FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+                );
                 """
             )
             conn.execute(
@@ -145,6 +165,7 @@ def ensure_database() -> None:
                 (DEV_USERNAME, DEV_PASSWORD_PLACEHOLDER_HASH, _now_iso()),
             )
         _migrate_legacy_data()
+        _initialize_companion_states()
         _db_ready = True
 
 
@@ -655,4 +676,120 @@ def set_reminder_state(username: str, last_sent: int) -> None:
                 last_sent = excluded.last_sent
             """,
             (username.strip().lower(), int(last_sent)),
+        )
+
+
+def _initialize_companion_states() -> None:
+    """Initialize companion_state for all users on startup."""
+    with get_connection() as conn:
+        users = conn.execute("SELECT username FROM users").fetchall()
+        for (username,) in users:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO companion_state (username, level, xp_current, mood, last_updated_at)
+                VALUES (?, 1, 0, ?, ?)
+                """,
+                (username, "healthy", _now_iso()),
+            )
+
+
+def get_companion_state(username: str) -> dict | None:
+    """Fetch companion state from database."""
+    ensure_database()
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT level, xp_current, mood, evolved_at, last_updated_at FROM companion_state WHERE username = ?",
+            (username.strip().lower(),),
+        ).fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def upsert_companion_state(username: str, level: int, xp_current: int, mood: str, evolved_at: str | None = None) -> None:
+    """Update or insert companion state."""
+    ensure_database()
+    now = _now_iso()
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO companion_state (username, level, xp_current, mood, evolved_at, last_updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET
+                level = excluded.level,
+                xp_current = excluded.xp_current,
+                mood = excluded.mood,
+                evolved_at = excluded.evolved_at,
+                last_updated_at = excluded.last_updated_at
+            """,
+            (username.strip().lower(), level, xp_current, mood, evolved_at, now),
+        )
+
+
+def log_companion_event(username: str, event_type: str, xp_gained: int) -> None:
+    """Log a companion event (entry logged, task completed, milestone, etc.)."""
+    ensure_database()
+    triggered_at = _now_iso()
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO companion_events (username, event_type, xp_gained, triggered_at) VALUES (?, ?, ?, ?)",
+            (username.strip().lower(), event_type, xp_gained, triggered_at),
+        )
+
+
+def _initialize_companion_states() -> None:
+    """Initialize companion_state for all users on startup."""
+    with get_connection() as conn:
+        users = conn.execute("SELECT username FROM users").fetchall()
+        for (username,) in users:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO companion_state (username, level, xp_current, mood, last_updated_at)
+                VALUES (?, 1, 0, ?, ?)
+                """,
+                (username, "healthy", _now_iso()),
+            )
+
+
+def get_companion_state(username: str) -> dict | None:
+    """Fetch companion state from database."""
+    ensure_database()
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT level, xp_current, mood, evolved_at, last_updated_at FROM companion_state WHERE username = ?",
+            (username.strip().lower(),),
+        ).fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def upsert_companion_state(username: str, level: int, xp_current: int, mood: str, evolved_at: str | None = None) -> None:
+    """Update or insert companion state."""
+    ensure_database()
+    now = _now_iso()
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO companion_state (username, level, xp_current, mood, evolved_at, last_updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET
+                level = excluded.level,
+                xp_current = excluded.xp_current,
+                mood = excluded.mood,
+                evolved_at = excluded.evolved_at,
+                last_updated_at = excluded.last_updated_at
+            """,
+            (username.strip().lower(), level, xp_current, mood, evolved_at, now),
+        )
+
+
+def log_companion_event(username: str, event_type: str, xp_gained: int) -> None:
+    """Log a companion event (entry logged, task completed, milestone, etc.)."""
+    ensure_database()
+    triggered_at = _now_iso()
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO companion_events (username, event_type, xp_gained, triggered_at) VALUES (?, ?, ?, ?)",
+            (username.strip().lower(), event_type, xp_gained, triggered_at),
         )

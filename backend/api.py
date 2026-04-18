@@ -12,6 +12,7 @@ import threading
 import logging
 import importlib
 import numpy as np
+from datetime import datetime
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from time import perf_counter
@@ -35,11 +36,13 @@ try:
         set_reminder_state,
         upsert_push_subscription,
         upsert_entry,
+        log_companion_event,
     )
     from .student_data import StudentData
     from .performance_model import PerformanceModel
     from .recommendation_engine import RecommendationEngine
     from .task_manager import TaskManager
+    from .companion import compute_companion_summary
 except ImportError:
     from auth import register_user, authenticate_user, create_token, decode_token
     from data_store import (
@@ -56,11 +59,13 @@ except ImportError:
         set_reminder_state,
         upsert_push_subscription,
         upsert_entry,
+        log_companion_event,
     )
     from student_data import StudentData
     from performance_model import PerformanceModel
     from recommendation_engine import RecommendationEngine
     from task_manager import TaskManager
+    from companion import compute_companion_summary
 
 # --------------------------------------------------
 # Cache + rate limiting
@@ -790,6 +795,12 @@ def add_entry(
     _invalidate_user_cache(entry.username)
     _schedule_analysis_refresh(entry.username)
 
+    # Log companion event
+    try:
+        log_companion_event(entry.username, "entry_logged", 10)
+    except Exception as e:
+        logger.warning("Failed to log companion event: %s", e)
+
     total_entries = len(get_entries_dataframe(entry.username))
     return {"message": "Entry saved", "total_entries": total_entries}
 
@@ -825,7 +836,13 @@ def complete_task(
 ):
     tm = TaskManager(action.username, USERS_DIR)
     try:
-        return tm.complete_task(action.task_id)
+        result = tm.complete_task(action.task_id)
+        # Log companion event
+        try:
+            log_companion_event(action.username, "task_completed", 5)
+        except Exception as e:
+            logger.warning("Failed to log companion event: %s", e)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -899,3 +916,57 @@ def get_prefill(
         except Exception:
             pass
     return {"hours_by_category": hours, "free_hours_yesterday": total_free}
+
+
+# --------------------------------------------------
+# Companion routes
+# --------------------------------------------------
+
+@app.get("/companion/{username}/summary")
+def get_companion_summary(
+    username: str,
+    current_user: str = Depends(get_current_user),
+):
+    """
+    Fetch live companion state: level, XP, mood, streak, performance influence.
+    Computed fresh from analysis + entries + tasks.
+    """
+    if username != current_user:
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    if not user_exists(username):
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Get analysis data if available
+    try:
+        analysis = build_analysis(username) if len(get_entries_dataframe(username)) >= 3 else None
+    except HTTPException:
+        analysis = None
+
+    # Compute companion summary
+    summary = compute_companion_summary(username, analysis)
+
+    return {
+        "username": username,
+        "level": summary["level"],
+        "level_name": summary.get("level_name", "Seed"),
+        "xp_current": summary["xp_current"],
+        "xp_to_level_up": summary["xp_to_level_up"],
+        "xp_threshold": summary["xp_threshold"],
+        "level_progress_pct": summary["level_progress_pct"],
+        "visual_stage": summary["visual_stage"],
+        "mood_trend": summary["mood_trend"],
+        "mood_emoji": summary.get("mood_emoji", "🌿"),
+        "streak": summary["streak"],
+        "last_activity_date": summary["last_activity_date"],
+        "days_since_activity": summary.get("days_since_activity", 0),
+        "performance_influence": {
+            "current_performance": summary["performance"],
+            "current_burnout": summary["burnout"],
+            "trend": summary["trend"],
+        },
+        "milestones_reached": summary["milestones_reached"],
+        "comeback_available": summary.get("comeback_available", False),
+        "comeback_bonus_xp": summary.get("comeback_bonus_xp", 0),
+        "entry_count": summary["entry_count"],
+        "updated_at": datetime.utcnow().isoformat(),
+    }

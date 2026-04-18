@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { apiFetch, registerPushSubscription } from "../api"
 import StreakBadge from "./StreakBadge"
+import Companion from "./Companion"
 
 function TimeRangeChart({ data, keyPerf, keyBurnout }) {
   const svgRef       = useRef(null)
@@ -417,6 +418,9 @@ export default function Dashboard({ username, onNavigate }) {
           </div>
         </div>
       </div>
+
+      {/* Companion */}
+      <Companion username={username} onError={(err) => setError(err.message)} />
 
       {/* Tasks bar */}
       <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",padding:"12px 16px"}}>
