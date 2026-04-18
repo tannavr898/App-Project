@@ -24,9 +24,14 @@ from data_store import (
     get_entries_dataframe,
     get_entries_version,
     get_entry_row,
+    get_push_subscriptions,
+    get_reminder_state,
     get_user,
     has_entries,
     list_users as store_list_users,
+    remove_push_subscription,
+    set_reminder_state,
+    upsert_push_subscription,
     upsert_entry,
 )
 from student_data import StudentData
@@ -255,57 +260,12 @@ def user_exists(username: str) -> bool:
     return get_user(username) is not None or has_entries(username)
 
 # --------------------------------------------------
-# Push helpers
-# --------------------------------------------------
-
-def _load_push_subscriptions() -> dict:
-    if not os.path.exists(PUSH_SUBSCRIPTION_FILE):
-        return {}
-    with open(PUSH_SUBSCRIPTION_FILE, "r", encoding="utf-8") as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return {}
-
-
-def _save_push_subscriptions(data: dict):
-    with open(PUSH_SUBSCRIPTION_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-
-def _load_reminder_state() -> dict:
-    if not os.path.exists(PUSH_REMINDER_STATE_FILE):
-        return {}
-    with open(PUSH_REMINDER_STATE_FILE, "r", encoding="utf-8") as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return {}
-
-
-def _save_reminder_state(state: dict):
-    with open(PUSH_REMINDER_STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2)
-
-
 def _store_subscription(username: str, subscription: dict):
-    subs = _load_push_subscriptions()
-    user_subs = subs.get(username, [])
-    if not any(s.get("endpoint") == subscription.get("endpoint") for s in user_subs):
-        user_subs.append(subscription)
-        subs[username] = user_subs
-        _save_push_subscriptions(subs)
+    upsert_push_subscription(username, subscription)
 
 
 def _remove_subscription(username: str, endpoint: str):
-    subs = _load_push_subscriptions()
-    user_subs = subs.get(username, [])
-    user_subs = [s for s in user_subs if s.get("endpoint") != endpoint]
-    if user_subs or username in subs:
-        subs[username] = user_subs
-        if not user_subs:
-            subs.pop(username, None)
-        _save_push_subscriptions(subs)
+    remove_push_subscription(username, endpoint)
 
 
 def _send_push(subscription: dict, payload: dict):
@@ -326,7 +286,7 @@ def _send_push(subscription: dict, payload: dict):
 
 
 def _notify_user(username: str, title: str, message: str, url: str = "/"):
-    subs = _load_push_subscriptions().get(username, [])
+    subs = get_push_subscriptions(username)
     if not subs or not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
         return
 
@@ -337,12 +297,14 @@ def _notify_user(username: str, title: str, message: str, url: str = "/"):
         if keep:
             remaining.append(sub)
     if len(remaining) != len(subs):
-        all_subs = _load_push_subscriptions()
         if remaining:
-            all_subs[username] = remaining
+            for sub in remaining:
+                upsert_push_subscription(username, sub)
         else:
-            all_subs.pop(username, None)
-        _save_push_subscriptions(all_subs)
+            for sub in subs:
+                endpoint = sub.get("endpoint")
+                if endpoint:
+                    remove_push_subscription(username, endpoint)
 
 
 def _today_date() -> str:
@@ -369,20 +331,18 @@ def _needs_log_entry(username: str) -> bool:
 
 
 def _dispatch_push_reminders():
-    state = _load_reminder_state()
-    subscriptions = _load_push_subscriptions()
+    subscriptions = {username: get_push_subscriptions(username) for username in store_list_users()}
     now = int(time.time())
     for username, subs in subscriptions.items():
-        last_sent = state.get(username, 0)
+        last_sent = get_reminder_state(username)
         if now - last_sent < 60 * 60:
             continue
         if _needs_log_entry(username):
             _notify_user(username, "Log your Pulse entry", "You haven't logged today's wellness entry yet.", "/log")
-            state[username] = now
+            set_reminder_state(username, now)
         elif _has_unfinished_tasks(username):
             _notify_user(username, "Finish your tasks", "You have unfinished tasks waiting in Pulse.", "/tasks")
-            state[username] = now
-    _save_reminder_state(state)
+            set_reminder_state(username, now)
 
 
 def _start_push_reminder_thread():
@@ -825,7 +785,7 @@ def get_prefill(
     total_free = None
     if user_exists(username):
         try:
-            df   = pd.read_csv(get_user_file(username))
+            df   = get_entries_dataframe(username)
             if not df.empty:
                 last       = df.iloc[-1]
                 logged     = (

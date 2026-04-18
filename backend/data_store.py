@@ -543,3 +543,69 @@ def get_today_category_hours(username: str) -> dict:
         if category in result:
             result[category] += float(hours or 0)
     return {k: round(v, 2) for k, v in result.items()}
+
+
+def get_push_subscriptions(username: str) -> list[dict]:
+    ensure_database()
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT subscription_json FROM push_subscriptions WHERE username = ? ORDER BY endpoint ASC",
+            (username.strip().lower(),),
+        ).fetchall()
+    subscriptions = []
+    for row in rows:
+        try:
+            subscriptions.append(json.loads(row[0]))
+        except Exception:
+            continue
+    return subscriptions
+
+
+def upsert_push_subscription(username: str, subscription: dict) -> None:
+    ensure_database()
+    endpoint = subscription.get("endpoint")
+    if not endpoint:
+        return
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO push_subscriptions (username, endpoint, subscription_json)
+            VALUES (?, ?, ?)
+            ON CONFLICT(username, endpoint) DO UPDATE SET
+                subscription_json = excluded.subscription_json
+            """,
+            (username.strip().lower(), endpoint, json.dumps(subscription)),
+        )
+
+
+def remove_push_subscription(username: str, endpoint: str) -> None:
+    ensure_database()
+    with get_connection() as conn:
+        conn.execute(
+            "DELETE FROM push_subscriptions WHERE username = ? AND endpoint = ?",
+            (username.strip().lower(), endpoint),
+        )
+
+
+def get_reminder_state(username: str) -> int:
+    ensure_database()
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT last_sent FROM push_reminder_state WHERE username = ?",
+            (username.strip().lower(),),
+        ).fetchone()
+    return int(row[0]) if row else 0
+
+
+def set_reminder_state(username: str, last_sent: int) -> None:
+    ensure_database()
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO push_reminder_state (username, last_sent)
+            VALUES (?, ?)
+            ON CONFLICT(username) DO UPDATE SET
+                last_sent = excluded.last_sent
+            """,
+            (username.strip().lower(), int(last_sent)),
+        )

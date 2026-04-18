@@ -1,5 +1,6 @@
 import argparse
 import sys
+import os
 
 """
 
@@ -8,6 +9,7 @@ import sys
 from backend.student_data import StudentData
 from backend.performance_model import PerformanceModel
 from backend.recommendation_engine import RecommendationEngine
+from backend.data_store import ensure_database, get_entries_dataframe
 import matplotlib.pyplot as plt
 
 
@@ -18,9 +20,19 @@ class StudentWellnessApp:
     def __init__(self, data_path: str):
         self.data_path = data_path
 
+    def _load_dataframe(self):
+        ensure_database()
+        if os.path.exists(self.data_path):
+            return StudentData(self.data_path).get_dataframe()
+
+        db_df = get_entries_dataframe(self.data_path)
+        if not db_df.empty:
+            return StudentData(dataframe=db_df).get_dataframe()
+
+        raise FileNotFoundError(f"No CSV file or SQLite user data found for '{self.data_path}'")
+
     def run_cli(self):
-        data = StudentData(self.data_path)
-        df = data.get_dataframe()
+        df = self._load_dataframe()
 
         perf_model = PerformanceModel()
         perf_model.train(df)

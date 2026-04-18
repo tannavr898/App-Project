@@ -10,6 +10,7 @@ import os
 from backend.student_data import StudentData
 from backend.performance_model import PerformanceModel
 from backend.recommendation_engine import RecommendationEngine
+from backend.data_store import ensure_database, get_entries_dataframe, list_users as store_list_users, upsert_entry
 
 
 def run_streamlit_app():
@@ -53,16 +54,18 @@ def run_streamlit_app():
     # =====================================================
     st.sidebar.title("🎓 Student Wellness")
     st.sidebar.markdown("---")
+    ensure_database()
 
     # User selection / creation
     st.sidebar.subheader("User Management")
     users_dir = "users"
     os.makedirs(users_dir, exist_ok=True)
 
-    # Get existing users
-    existing_users = []
+    # Get existing users from SQLite, with CSV fallback for legacy files
+    existing_users = store_list_users()
     if os.path.exists(users_dir):
-        existing_users = [f.replace(".csv", "") for f in os.listdir(users_dir) if f.endswith(".csv")]
+        legacy_users = [f.replace(".csv", "") for f in os.listdir(users_dir) if f.endswith(".csv")]
+        existing_users = sorted(set(existing_users).union(legacy_users))
 
     user_mode = st.sidebar.radio("Select Mode:", ["View Existing User", "Create New User"])
 
@@ -87,8 +90,16 @@ def run_streamlit_app():
                 imported_df = pd.read_csv(uploaded_file)
                 required_cols = ['date', 'sleep_hours', 'study_hours', 'training_hours', 'stress', 'fatigue', 'productivity']
                 if all(col in imported_df.columns for col in required_cols):
-                    user_file = f"{users_dir}/{selected_user}.csv"
-                    imported_df.to_csv(user_file, index=False)
+                    for _, row in imported_df.iterrows():
+                        upsert_entry(selected_user, {
+                            "date": str(row["date"])[:10],
+                            "sleep_hours": row["sleep_hours"],
+                            "study_hours": row["study_hours"],
+                            "training_hours": row["training_hours"],
+                            "stress": row["stress"],
+                            "fatigue": row["fatigue"],
+                            "productivity": row["productivity"],
+                        })
                     st.sidebar.success("✅ Data imported successfully!")
                     st.rerun()  # Refresh to load new data
                 else:
@@ -101,30 +112,19 @@ def run_streamlit_app():
     # =====================================================
     def load_user_data(username):
         """Load or initialize user data"""
-        user_file = f"{users_dir}/{username}.csv"
-        
-        if os.path.exists(user_file):
-            data = StudentData(user_file)
-            return data
-        else:
+        df = get_entries_dataframe(username)
+        if df.empty:
+            user_file = f"{users_dir}/{username}.csv"
+            if os.path.exists(user_file):
+                return StudentData(user_file)
             return None
+        return StudentData(dataframe=df)
 
 
     def save_user_data(username, new_entry):
         """Save new entry to user's CSV file"""
-        user_file = f"{users_dir}/{username}.csv"
-        
-        if os.path.exists(user_file):
-            df = pd.read_csv(user_file)
-        else:
-            df = pd.DataFrame()
-        
-        # Append new entry
-        new_entry_df = pd.DataFrame([new_entry])
-        df = pd.concat([df, new_entry_df], ignore_index=True)
-        df.to_csv(user_file, index=False)
-        
-        return df
+        upsert_entry(username, new_entry)
+        return get_entries_dataframe(username)
 
 
     # =====================================================
