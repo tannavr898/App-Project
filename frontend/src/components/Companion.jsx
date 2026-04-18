@@ -12,13 +12,18 @@ export default function Companion({ username, onError }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pulseKey, setPulseKey] = useState(0); // Force re-render for heartbeat animation
+  const [pollingEnabled, setPollingEnabled] = useState(true);
 
   // Fetch companion summary from API
   const fetchCompanion = async () => {
     try {
       setError(null);
+      if (!pollingEnabled) return;
       const response = await apiFetch(`/companion/${username}/summary`, { timeoutMs: 20000 });
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          setPollingEnabled(false);
+        }
         throw new Error(`Failed to fetch companion: ${response.statusText}`);
       }
       const data = await response.json();
@@ -35,17 +40,19 @@ export default function Companion({ username, onError }) {
 
   // Initial fetch
   useEffect(() => {
+    setPollingEnabled(true);
     fetchCompanion();
   }, [username]);
 
   // Refresh every 60s + occasional pulse animation trigger
   useEffect(() => {
+    if (!pollingEnabled) return;
     const interval = setInterval(() => {
       fetchCompanion();
       setPulseKey((prev) => prev + 1); // Trigger heartbeat animation
     }, 60000);
     return () => clearInterval(interval);
-  }, [username]);
+  }, [username, pollingEnabled]);
 
   if (loading) {
     return (

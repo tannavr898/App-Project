@@ -931,23 +931,30 @@ def get_companion_summary(
     Fetch live companion state: level, XP, mood, streak, performance influence.
     Computed fresh from analysis + entries + tasks.
     """
-    if username.strip().lower() != current_user.strip().lower():
-        raise HTTPException(status_code=403, detail="Username mismatch")
-    if not user_exists(username):
+    requested_username = username.strip().lower()
+    effective_username = current_user.strip().lower()
+    if requested_username != effective_username:
+        logger.warning(
+            "companion_username_mismatch requested=%s token_user=%s; using token user",
+            requested_username,
+            effective_username,
+        )
+
+    if not user_exists(effective_username):
         raise HTTPException(status_code=404, detail="User not found")
 
     try:
         # Get analysis data if available
         try:
-            analysis = build_analysis(username) if len(get_entries_dataframe(username)) >= 3 else None
+            analysis = build_analysis(effective_username) if len(get_entries_dataframe(effective_username)) >= 3 else None
         except HTTPException:
             analysis = None
 
         # Compute companion summary
-        summary = compute_companion_summary(username, analysis)
+        summary = compute_companion_summary(effective_username, analysis)
 
         return {
-            "username": username,
+            "username": effective_username,
             "level": summary["level"],
             "level_name": summary.get("level_name", "Seed"),
             "xp_current": summary["xp_current"],
@@ -972,10 +979,10 @@ def get_companion_summary(
             "updated_at": datetime.utcnow().isoformat(),
         }
     except Exception as exc:
-        logger.exception("companion_summary_failed username=%s error=%s", username, exc)
+        logger.exception("companion_summary_failed username=%s error=%s", effective_username, exc)
         # Keep dashboard usable even if companion computation fails.
         return {
-            "username": username,
+            "username": effective_username,
             "level": 1,
             "level_name": "Seed",
             "xp_current": 0,
