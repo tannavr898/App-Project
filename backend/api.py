@@ -150,9 +150,16 @@ if sentry_dsn:
 
 default_origins = {
     "https://pulsewellness.vercel.app",
+    "https://www.pulsewellness.vercel.app",
     "http://localhost:3000",
     "http://localhost:5173",
 }
+
+# Accept Vercel preview deployments (e.g. branch-name-project.vercel.app).
+default_origin_regex = os.environ.get(
+    "FRONTEND_ORIGIN_REGEX",
+    r"https://([a-zA-Z0-9-]+\.)*vercel\.app",
+)
 
 frontend_url = os.environ.get("FRONTEND_URL", "").strip()
 if frontend_url:
@@ -168,6 +175,7 @@ if frontend_urls:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(default_origins),
+    allow_origin_regex=default_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
