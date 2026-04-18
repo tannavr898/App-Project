@@ -1,18 +1,32 @@
 import uuid
 from datetime import date
 
-from data_store import (
-    apply_task_carry_over,
-    delete_task,
-    ensure_database,
-    get_completion_history,
-    get_today_category_hours,
-    get_todays_tasks,
-    get_task,
-    set_task_completed,
-    toggle_task_carry_over,
-    upsert_task,
-)
+try:
+    from .data_store import (
+        apply_task_carry_over,
+        delete_task,
+        ensure_database,
+        get_completion_history,
+        get_today_category_hours,
+        get_todays_tasks,
+        get_task,
+        set_task_completed,
+        toggle_task_carry_over,
+        upsert_task,
+    )
+except ImportError:
+    from data_store import (
+        apply_task_carry_over,
+        delete_task,
+        ensure_database,
+        get_completion_history,
+        get_today_category_hours,
+        get_todays_tasks,
+        get_task,
+        set_task_completed,
+        toggle_task_carry_over,
+        upsert_task,
+    )
 
 
 class TaskManager:

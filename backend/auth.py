@@ -5,7 +5,10 @@ from typing import Optional
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 
-from data_store import ensure_database, get_user, upsert_user
+try:
+    from .data_store import ensure_database, get_user, upsert_user
+except ImportError:
+    from data_store import ensure_database, get_user, upsert_user
 
 SECRET_KEY = os.environ.get("PULSE_SECRET", "pulse-dev-secret-change-in-production")
 ALGORITHM  = "HS256"

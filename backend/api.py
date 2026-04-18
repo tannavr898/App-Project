@@ -18,26 +18,48 @@ from pywebpush import webpush, WebPushException
 
 from fastapi import UploadFile, File
 
-from auth import register_user, authenticate_user, create_token, decode_token
-from data_store import (
-    ensure_database,
-    get_entries_dataframe,
-    get_entries_version,
-    get_entry_row,
-    get_push_subscriptions,
-    get_reminder_state,
-    get_user,
-    has_entries,
-    list_users as store_list_users,
-    remove_push_subscription,
-    set_reminder_state,
-    upsert_push_subscription,
-    upsert_entry,
-)
-from student_data import StudentData
-from performance_model import PerformanceModel
-from recommendation_engine import RecommendationEngine
-from task_manager import TaskManager
+try:
+    from .auth import register_user, authenticate_user, create_token, decode_token
+    from .data_store import (
+        ensure_database,
+        get_entries_dataframe,
+        get_entries_version,
+        get_entry_row,
+        get_push_subscriptions,
+        get_reminder_state,
+        get_user,
+        has_entries,
+        list_users as store_list_users,
+        remove_push_subscription,
+        set_reminder_state,
+        upsert_push_subscription,
+        upsert_entry,
+    )
+    from .student_data import StudentData
+    from .performance_model import PerformanceModel
+    from .recommendation_engine import RecommendationEngine
+    from .task_manager import TaskManager
+except ImportError:
+    from auth import register_user, authenticate_user, create_token, decode_token
+    from data_store import (
+        ensure_database,
+        get_entries_dataframe,
+        get_entries_version,
+        get_entry_row,
+        get_push_subscriptions,
+        get_reminder_state,
+        get_user,
+        has_entries,
+        list_users as store_list_users,
+        remove_push_subscription,
+        set_reminder_state,
+        upsert_push_subscription,
+        upsert_entry,
+    )
+    from student_data import StudentData
+    from performance_model import PerformanceModel
+    from recommendation_engine import RecommendationEngine
+    from task_manager import TaskManager
 
 # --------------------------------------------------
 # Cache + rate limiting
