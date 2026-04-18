@@ -264,6 +264,14 @@ export default function Dashboard({ username, onNavigate }) {
     setPushStatus(Notification.permission)
   }, [])
 
+  useEffect(() => {
+    apiFetch(`/companion/${username}/summary`, {
+      timeoutMs: 20000,
+      cacheKey: `companion:${username}`,
+      cacheTtlMs: 300000,
+    }).catch(() => {})
+  }, [username])
+
   const enablePush = async () => {
     if (pushLoading) return
     setPushLoading(true)

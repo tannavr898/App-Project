@@ -51,11 +51,30 @@
   padding: 14px;
 }
 
+.companion-summary-dominant {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .companion-shell--full {
   padding: 0;
   background: transparent;
   border: 0;
   box-shadow: none;
+}
+
+.companion-full-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 36vw) 1fr;
+  gap: 22px;
+  width: 100%;
+  align-items: start;
+}
+
+.companion-full-content {
+  min-width: 0;
 }
 
 .companion-summary-header,
@@ -68,9 +87,9 @@
 
 .companion-shell--full .companion-hero {
   grid-template-columns: 1fr;
-  justify-items: center;
-  gap: 18px;
-  text-align: center;
+  justify-items: stretch;
+  gap: 14px;
+  text-align: left;
 }
 
 .companion-shell--full .companion-grid {
@@ -329,7 +348,7 @@
 }
 
 .companion-stage::before {
-  background: radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.85), transparent 52%);
+  background: radial-gradient(circle at 50% 24%, rgba(255, 255, 255, 0.38), transparent 64%);
 }
 
 .companion-stage::after {
@@ -339,8 +358,31 @@
 
 .companion-stage-glow {
   inset: 16px;
-  background: radial-gradient(circle, rgba(55, 138, 221, 0.12), rgba(55, 138, 221, 0) 70%);
+  background: radial-gradient(circle, rgba(55, 138, 221, 0.06), rgba(55, 138, 221, 0) 72%);
   animation: glow-breathe 3.8s ease-in-out infinite;
+}
+
+.companion-stage--summary-dominant {
+  width: 100%;
+  min-height: 210px;
+  border-radius: 18px;
+}
+
+.companion-stage--full-left {
+  min-height: 420px;
+}
+
+.companion-open-fab {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 3;
+}
+
+.companion-progress-block--summary-dominant {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .companion-visual {
@@ -721,6 +763,11 @@
   padding-top: 0;
 }
 
+.companion-shell--full .companion-hero,
+.companion-shell--full .companion-summary-grid {
+  max-width: 100%;
+}
+
 .companion-panel--soft {
   background: linear-gradient(180deg, rgba(225, 245, 238, 0.36), rgba(225, 245, 238, 0.15));
 }
@@ -908,6 +955,15 @@
 }
 
 @media (max-width: 900px) {
+  .companion-full-layout {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .companion-stage--full-left {
+    min-height: 320px;
+  }
+
   .companion-grid,
   .companion-summary-header,
   .companion-hero {
@@ -960,6 +1016,15 @@
   .companion-stage--full {
     width: min(210px, 88vw);
     min-height: 210px;
+  }
+
+  .companion-stage--summary-dominant {
+    min-height: 170px;
+  }
+
+  .companion-stage--full-left {
+    min-height: 240px;
+    width: 100%;
   }
 
   .companion-visual {
