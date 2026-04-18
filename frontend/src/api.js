@@ -27,24 +27,25 @@ function trackApiMetric(eventName, payload) {
 
 // Authenticated fetch — automatically attaches the JWT header
 export async function apiFetch(path, options = {}) {
+  const { timeoutMs = REQUEST_TIMEOUT_MS, ...fetchOptions } = options
   const token = getToken()
   const headers = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(options.headers || {}),
+    ...(fetchOptions.headers || {}),
   }
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
   const started = performance.now()
 
   try {
-    const res = await fetch(`${BASE}${path}`, { ...options, headers, signal: controller.signal })
+    const res = await fetch(`${BASE}${path}`, { ...fetchOptions, headers, signal: controller.signal })
     const durationMs = Math.round(performance.now() - started)
 
     trackApiMetric("api_request", {
       endpoint: path,
-      method: options.method || "GET",
+      method: fetchOptions.method || "GET",
       status: res.status,
       duration_ms: durationMs,
     })
@@ -59,7 +60,7 @@ export async function apiFetch(path, options = {}) {
     const reason = err?.name === "AbortError" ? "timeout" : "network"
     trackApiMetric("api_error", {
       endpoint: path,
-      method: options.method || "GET",
+      method: fetchOptions.method || "GET",
       reason,
       duration_ms: durationMs,
     })

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getApiUrl } from "../api";
+import { apiFetch } from "../api";
 import "../styles/Companion.css";
 
 /**
@@ -17,11 +17,7 @@ export default function Companion({ username, onError }) {
   const fetchCompanion = async () => {
     try {
       setError(null);
-      const response = await fetch(getApiUrl(`/companion/${username}/summary`), {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
+      const response = await apiFetch(`/companion/${username}/summary`, { timeoutMs: 20000 });
       if (!response.ok) {
         throw new Error(`Failed to fetch companion: ${response.statusText}`);
       }
@@ -30,7 +26,8 @@ export default function Companion({ username, onError }) {
       setLoading(false);
     } catch (err) {
       console.error("Companion fetch error:", err);
-      setError(err.message);
+      const message = err?.name === "AbortError" ? "Companion is taking longer than expected" : (err?.message || "Failed to load companion");
+      setError(message);
       if (onError) onError(err);
       setLoading(false);
     }

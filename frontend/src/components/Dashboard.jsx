@@ -262,6 +262,8 @@ export default function Dashboard({ username, onNavigate }) {
   }
 
   useEffect(() => {
+    let cancelled = false
+
     const loadData = async () => {
       setLoading(true)
       setError(null)
@@ -269,7 +271,7 @@ export default function Dashboard({ username, onNavigate }) {
       try {
         const fetchAnalysis = async () => {
           for (let attempt = 0; attempt < 12; attempt += 1) {
-            const r = await apiFetch(`/users/${username}/analysis`)
+            const r = await apiFetch(`/users/${username}/analysis`, { timeoutMs: 30000 })
             if (r.status === 202) {
               await new Promise(resolve => setTimeout(resolve, 1200))
               continue
@@ -286,25 +288,31 @@ export default function Dashboard({ username, onNavigate }) {
           throw new Error('Analysis is still processing. Try again in a moment.')
         }
 
-        const entriesPromise = apiFetch(`/users/${username}/entries`)
+        const entriesPromise = apiFetch(`/users/${username}/entries`, { timeoutMs: 20000 })
         const d = await fetchAnalysis()
+        if (cancelled) return
         setData(d)
 
         // Fetch tasks based on plan
         const recMode = d.recommended_mode || 'comfortable'
         const recPlan = d.plans?.[recMode] || d.optimal_plan
-        const tasksRes = await apiFetch(`/tasks/${username}?recommended_hours=${recPlan?.study ?? 3.5}`)
+        const tasksRes = await apiFetch(`/tasks/${username}?recommended_hours=${recPlan?.study ?? 3.5}`, { timeoutMs: 20000 })
         const t = await tasksRes.json()
+        if (cancelled) return
         setTasks(t.tasks || [])
         setProgress(t.progress || null)
 
         // Entries can load independently
         const entriesRes = await entriesPromise
         const entriesData = entriesRes.ok ? await entriesRes.json() : { entries: [] }
+        if (cancelled) return
         setEntries(entriesData.entries || [])
 
       } catch (e) {
-        const message = e?.message || 'Failed to load dashboard data'
+        if (cancelled) return
+        const message = e?.name === 'AbortError'
+          ? 'Request timed out while loading dashboard data. Please retry in a moment.'
+          : (e?.message || 'Failed to load dashboard data')
         if (message.includes('Not enough data yet')) {
           setIsFirstRun(true)
           setError(null)
@@ -312,11 +320,16 @@ export default function Dashboard({ username, onNavigate }) {
         }
         setError(message)
       } finally {
+        if (cancelled) return
         setLoading(false)
       }
     }
 
     loadData()
+
+    return () => {
+      cancelled = true
+    }
   }, [username])
 
   // Refetch tasks when user picks a different plan mode
@@ -420,7 +433,7 @@ export default function Dashboard({ username, onNavigate }) {
       </div>
 
       {/* Companion */}
-      <Companion username={username} onError={(err) => setError(err.message)} />
+      <Companion username={username} />
 
       {/* Tasks bar */}
       <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",padding:"12px 16px"}}>
