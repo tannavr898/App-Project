@@ -52,7 +52,10 @@
 }
 
 .companion-shell--full {
-  padding: 18px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .companion-summary-header,
@@ -86,6 +89,96 @@
   width: 130px;
   min-height: 130px;
   border-radius: 28px;
+}
+
+.companion-art {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  transform: translateZ(0);
+}
+
+.companion-art-orbit,
+.companion-art-petal,
+.companion-art-spark {
+  position: absolute;
+}
+
+.companion-art-orbit {
+  inset: 20%;
+  border-radius: 50%;
+  border: 1px solid rgba(29, 158, 117, 0.16);
+  animation: orbit-spin 18s linear infinite;
+}
+
+.companion-art-orbit--b {
+  inset: 30%;
+  animation-duration: 26s;
+  animation-direction: reverse;
+  border-color: rgba(55, 138, 221, 0.16);
+}
+
+.companion-art-petal {
+  width: 22%;
+  height: 12%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(29, 158, 117, 0.5), rgba(55, 138, 221, 0.45));
+  filter: blur(0.1px);
+  transform-origin: center;
+  animation: petal-breathe 3.4s ease-in-out infinite;
+}
+
+.companion-art-petal--1 { transform: translateY(-70%) rotate(0deg); }
+.companion-art-petal--2 { transform: translate(54%, -32%) rotate(60deg); }
+.companion-art-petal--3 { transform: translate(54%, 32%) rotate(120deg); }
+.companion-art-petal--4 { transform: translateY(70%) rotate(180deg); }
+.companion-art-petal--5 { transform: translate(-54%, 32%) rotate(240deg); }
+.companion-art-petal--6 { transform: translate(-54%, -32%) rotate(300deg); }
+
+.companion-art-core {
+  position: relative;
+  z-index: 2;
+  width: 42%;
+  height: 42%;
+  display: grid;
+  place-items: center;
+  border-radius: 32% 68% 62% 38% / 44% 40% 60% 56%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.28) 28%, transparent 34%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.14), rgba(29, 158, 117, 0.24) 45%, rgba(55, 138, 221, 0.26) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.4) inset,
+    0 10px 24px rgba(29, 158, 117, 0.15),
+    0 0 30px rgba(55, 138, 221, 0.18);
+  animation: core-float 4.8s ease-in-out infinite;
+}
+
+.companion-art-core span {
+  font-size: 26px;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.12));
+}
+
+.companion-art-spark {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(239, 159, 39, 0.85);
+  box-shadow: 0 0 14px rgba(239, 159, 39, 0.35);
+  animation: spark-twinkle 2.8s ease-in-out infinite;
+}
+
+.companion-art-spark--1 {
+  top: 18%;
+  right: 20%;
+}
+
+.companion-art-spark--2 {
+  left: 18%;
+  bottom: 22%;
+  animation-delay: 0.8s;
 }
 
 .companion-stage::before,
@@ -161,6 +254,24 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--faint);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.companion-help {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 11px;
+  cursor: help;
 }
 
 .companion-mood-emoji {
@@ -426,6 +537,19 @@
   border: 1px solid var(--border);
 }
 
+.companion-shell--full .companion-panel {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding: 18px 0 0;
+}
+
+.companion-shell--full .companion-panel:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
 .companion-panel--soft {
   background: linear-gradient(180deg, rgba(225, 245, 238, 0.36), rgba(225, 245, 238, 0.15));
 }
@@ -533,6 +657,49 @@
   }
 }
 
+@keyframes orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes petal-breathe {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes core-float {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.03);
+  }
+}
+
+@keyframes spark-twinkle {
+  0%,
+  100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
 @media (max-width: 900px) {
   .companion-grid,
   .companion-summary-header,
@@ -543,6 +710,10 @@
   .companion-stage--full {
     width: 110px;
     min-height: 110px;
+  }
+
+  .companion-shell--full .companion-panel {
+    padding-top: 14px;
   }
 
   .companion-summary-grid,
@@ -597,5 +768,9 @@
   .companion-bullet-list span,
   .companion-bullet-list strong {
     font-size: 11px;
+  }
+
+  .companion-art-core span {
+    font-size: 22px;
   }
 }

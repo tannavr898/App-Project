@@ -271,7 +271,11 @@ export default function Dashboard({ username, onNavigate }) {
       try {
         const fetchAnalysis = async () => {
           for (let attempt = 0; attempt < 12; attempt += 1) {
-            const r = await apiFetch(`/users/${username}/analysis`, { timeoutMs: 30000 })
+            const r = await apiFetch(`/users/${username}/analysis`, {
+              timeoutMs: 30000,
+              cacheKey: `analysis:${username}`,
+              cacheTtlMs: 60000,
+            })
             if (r.status === 202) {
               await new Promise(resolve => setTimeout(resolve, 1200))
               continue
@@ -288,7 +292,11 @@ export default function Dashboard({ username, onNavigate }) {
           throw new Error('Analysis is still processing. Try again in a moment.')
         }
 
-        const entriesPromise = apiFetch(`/users/${username}/entries`, { timeoutMs: 20000 })
+        const entriesPromise = apiFetch(`/users/${username}/entries`, {
+          timeoutMs: 20000,
+          cacheKey: `entries:${username}`,
+          cacheTtlMs: 45000,
+        })
         const d = await fetchAnalysis()
         if (cancelled) return
         setData(d)
@@ -296,7 +304,11 @@ export default function Dashboard({ username, onNavigate }) {
         // Fetch tasks based on plan
         const recMode = d.recommended_mode || 'comfortable'
         const recPlan = d.plans?.[recMode] || d.optimal_plan
-        const tasksRes = await apiFetch(`/tasks/${username}?recommended_hours=${recPlan?.study ?? 3.5}`, { timeoutMs: 20000 })
+        const tasksRes = await apiFetch(`/tasks/${username}?recommended_hours=${recPlan?.study ?? 3.5}`, {
+          timeoutMs: 20000,
+          cacheKey: `tasks:${username}:${recPlan?.study ?? 3.5}`,
+          cacheTtlMs: 45000,
+        })
         const t = await tasksRes.json()
         if (cancelled) return
         setTasks(t.tasks || [])
@@ -338,7 +350,10 @@ export default function Dashboard({ username, onNavigate }) {
     const mode = selectedMode || data.recommended_mode || "comfortable"
     const plan = data.plans?.[mode] || data.optimal_plan
     const recHours = plan?.study ?? 3.5
-    apiFetch(`/tasks/${username}?recommended_hours=${recHours}`)
+    apiFetch(`/tasks/${username}?recommended_hours=${recHours}`, {
+      cacheKey: `tasks:${username}:${recHours}`,
+      cacheTtlMs: 45000,
+    })
       .then(r => r.json())
       .then(t => { setTasks(t.tasks||[]); setProgress(t.progress||null) })
       .catch(() => {})

@@ -1,5 +1,7 @@
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000"
 const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 12000)
+const RESPONSE_CACHE_PREFIX = "pulse-cache:"
+const responseCache = new Map()
 
 function getToken() {
   return localStorage.getItem("pulse-token")
@@ -25,10 +27,111 @@ function trackApiMetric(eventName, payload) {
   window.gtag("event", eventName, payload)
 }
 
+function getCacheStorageKey(cacheKey) {
+  return `${RESPONSE_CACHE_PREFIX}${cacheKey}`
+}
+
+function readCachedResponse(cacheKey, cacheTtlMs) {
+  const now = Date.now()
+  const inMemory = responseCache.get(cacheKey)
+  if (inMemory && now - inMemory.storedAt <= cacheTtlMs) {
+    return new Response(inMemory.bodyText, {
+      status: inMemory.status,
+      statusText: inMemory.statusText,
+      headers: inMemory.headers,
+    })
+  }
+
+  if (typeof window === "undefined") return null
+
+  const raw = window.localStorage.getItem(getCacheStorageKey(cacheKey))
+  if (!raw) return null
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (now - parsed.storedAt > cacheTtlMs) {
+      window.localStorage.removeItem(getCacheStorageKey(cacheKey))
+      return null
+    }
+    responseCache.set(cacheKey, parsed)
+    return new Response(parsed.bodyText, {
+      status: parsed.status,
+      statusText: parsed.statusText,
+      headers: parsed.headers,
+    })
+  } catch {
+    window.localStorage.removeItem(getCacheStorageKey(cacheKey))
+    return null
+  }
+}
+
+function writeCachedResponse(cacheKey, response, bodyText) {
+  const headers = {}
+  response.headers.forEach((value, key) => {
+    headers[key] = value
+  })
+
+  const cached = {
+    bodyText,
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+    storedAt: Date.now(),
+  }
+
+  responseCache.set(cacheKey, cached)
+
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(getCacheStorageKey(cacheKey), JSON.stringify(cached))
+  } catch {
+    // Ignore storage quota / privacy failures.
+  }
+}
+
+export function clearApiCache(match = null) {
+  for (const key of [...responseCache.keys()]) {
+    if (!match || match(key)) {
+      responseCache.delete(key)
+    }
+  }
+
+  if (typeof window === "undefined") return
+
+  const keysToRemove = []
+  for (let i = 0; i < window.localStorage.length; i += 1) {
+    const key = window.localStorage.key(i)
+    if (key && key.startsWith(RESPONSE_CACHE_PREFIX)) {
+      const cacheKey = key.slice(RESPONSE_CACHE_PREFIX.length)
+      if (!match || match(cacheKey)) {
+        keysToRemove.push(key)
+      }
+    }
+  }
+
+  keysToRemove.forEach((key) => window.localStorage.removeItem(key))
+}
+
 // Authenticated fetch — automatically attaches the JWT header
 export async function apiFetch(path, options = {}) {
-  const { timeoutMs = REQUEST_TIMEOUT_MS, ...fetchOptions } = options
+  const { timeoutMs = REQUEST_TIMEOUT_MS, cacheKey = null, cacheTtlMs = 0, ...fetchOptions } = options
   const token = getToken()
+  const method = (fetchOptions.method || "GET").toUpperCase()
+
+  if (method === "GET" && cacheKey && cacheTtlMs > 0) {
+    const cachedResponse = readCachedResponse(cacheKey, cacheTtlMs)
+    if (cachedResponse) {
+      trackApiMetric("api_request", {
+        endpoint: path,
+        method,
+        status: cachedResponse.status,
+        duration_ms: 0,
+        cache_hit: true,
+      })
+      return cachedResponse
+    }
+  }
+
   const headers = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -54,6 +157,12 @@ export async function apiFetch(path, options = {}) {
       clearAuth()
       window.location.reload()
     }
+
+    if (method === "GET" && cacheKey && cacheTtlMs > 0 && res.ok) {
+      const bodyText = await res.clone().text()
+      writeCachedResponse(cacheKey, res, bodyText)
+    }
+
     return res
   } catch (err) {
     const durationMs = Math.round(performance.now() - started)

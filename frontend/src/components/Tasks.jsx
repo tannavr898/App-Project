@@ -1,4 +1,4 @@
-import { apiFetch } from "../api"
+import { apiFetch, clearApiCache } from "../api"
 import { useState, useEffect } from "react"
 
 const getLocalDate = date => {
@@ -71,7 +71,10 @@ export default function Tasks({ username }) {
 
   const load = async () => {
     try {
-      const r = await apiFetch(`/tasks/${username}?recommended_hours=${recHours}`)
+      const r = await apiFetch(`/tasks/${username}?recommended_hours=${recHours}`, {
+        cacheKey: `tasks:${username}:${recHours}`,
+        cacheTtlMs: 45000,
+      })
       const d = await r.json()
       setTasks(d.tasks || [])
       setProgress(d.progress || null)
@@ -86,7 +89,10 @@ export default function Tasks({ username }) {
     // Fetch selected plan mode from localStorage
     const selectedMode = localStorage.getItem(`pulse-plan-${username}`)
     
-    apiFetch(`/users/${username}/analysis`)
+    apiFetch(`/users/${username}/analysis`, {
+      cacheKey: `analysis:${username}`,
+      cacheTtlMs: 60000,
+    })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d?.plans && selectedMode) {
@@ -102,11 +108,17 @@ export default function Tasks({ username }) {
         }
       })
       .catch(() => {})
-    apiFetch(`/tasks/${username}/history`)
+    apiFetch(`/tasks/${username}/history`, {
+      cacheKey: `task-history:${username}`,
+      cacheTtlMs: 60000,
+    })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.history) setHistory(d.history) })
       .catch(() => {})
-    apiFetch(`/tasks/${username}/prefill`)
+    apiFetch(`/tasks/${username}/prefill`, {
+      cacheKey: `task-prefill:${username}`,
+      cacheTtlMs: 60000,
+    })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.free_hours_yesterday != null) setFreeHours(d.free_hours_yesterday) })
       .catch(() => {})
@@ -123,7 +135,10 @@ export default function Tasks({ username }) {
     const handleStorageChange = () => {
       const selectedMode = localStorage.getItem(`pulse-plan-${username}`)
       if (selectedMode) {
-        apiFetch(`/users/${username}/analysis`)
+        apiFetch(`/users/${username}/analysis`, {
+          cacheKey: `analysis:${username}`,
+          cacheTtlMs: 60000,
+        })
           .then(r => r.ok ? r.json() : null)
           .then(d => {
             if (d?.plans?.[selectedMode]?.study) {
@@ -147,6 +162,7 @@ export default function Tasks({ username }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, name: newName.trim(), hours: newHours, carry_over: newCarryOver, category: newCat }),
       })
+      clearApiCache(key => key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       setNewName("")
       setNewHours(1)
       setNewCarryOver(false)
@@ -164,6 +180,7 @@ export default function Tasks({ username }) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, task_id: task.id }),
       })
+      clearApiCache(key => key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       await load()
     } finally {
       setActionPending(false)
@@ -175,6 +192,7 @@ export default function Tasks({ username }) {
     setActionPending(true)
     try {
       await apiFetch(`/tasks/${username}/${id}`, { method: "DELETE" })
+      clearApiCache(key => key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       await load()
     } finally {
       setActionPending(false)
@@ -189,6 +207,7 @@ export default function Tasks({ username }) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, task_id: task.id }),
       })
+      clearApiCache(key => key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       await load()
     } finally {
       setActionPending(false)

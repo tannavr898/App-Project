@@ -1,4 +1,4 @@
-import { apiFetch } from "../api"
+import { apiFetch, clearApiCache } from "../api"
 import { useState, useEffect } from "react"
 import StreakBadge from "./StreakBadge"
 
@@ -150,6 +150,7 @@ export default function LogEntry({ username, onSaved }) {
           training_hours: training,
         })
       }
+      clearApiCache(key => key.includes(`/users/${username}/`) || key.includes(`/tasks/${username}`) || key.includes(`/companion/${username}/summary`))
       setSaved(true)
       setTimeout(() => onSaved(), 900)
     } catch {

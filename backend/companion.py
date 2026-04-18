@@ -102,6 +102,9 @@ LEVEL_THRESHOLDS = {
     3: 120,    # Young Plant: hit around day 7 with daily + tasks
     4: 220,    # Blooming: week 2
     5: 400,    # Flourishing: week 3+
+    6: 650,    # Canopy: deeper consistency
+    7: 950,    # Wildwood: sustained habit lock-in
+    8: 1350,   # Evergreen: long-term mastery
 }
 
 LEVEL_NAMES = {
@@ -110,6 +113,9 @@ LEVEL_NAMES = {
     3: "Young Plant",
     4: "Blooming",
     5: "Flourishing",
+    6: "Canopy",
+    7: "Wildwood",
+    8: "Evergreen",
 }
 
 # Mood states (thresholds)
@@ -127,6 +133,9 @@ VISUAL_STAGES = {
     3: ["🪴", "🪴✨", "🪴🌸", "🌸🌸"],
     4: ["🌸🌸✨", "🌻", "🌻✨", "🌺"],
     5: ["🌺✨", "🌺🌺", "🌺🌺✨", "🎄"],
+    6: ["🌳", "🌳✨", "🌳🌿", "🌳🌟"],
+    7: ["🌲", "🌲✨", "🌲🌿", "🌲🌟"],
+    8: ["🌌", "🌟", "✨🌲", "💫🌿"],
 }
 
 # Companion mini-mood emojis (based on today's single entry)
@@ -321,7 +330,8 @@ def get_level_from_xp(xp: int) -> int:
 
 def get_xp_to_next_level(xp: int, current_level: int) -> int:
     """How many XP needed to reach next level?"""
-    if current_level >= 5:
+    max_level = max(LEVEL_THRESHOLDS)
+    if current_level >= max_level:
         return 0  # Max level
 
     next_level_threshold = LEVEL_THRESHOLDS[current_level + 1]
@@ -331,7 +341,8 @@ def get_xp_to_next_level(xp: int, current_level: int) -> int:
 def get_level_progress_percent(xp: int, current_level: int) -> float:
     """Progress bar percentage within current level (0-100)."""
     current_threshold = LEVEL_THRESHOLDS[current_level]
-    if current_level >= 5:
+    max_level = max(LEVEL_THRESHOLDS)
+    if current_level >= max_level:
         return 100.0
 
     next_threshold = LEVEL_THRESHOLDS[current_level + 1]

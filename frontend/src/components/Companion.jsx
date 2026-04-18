@@ -33,6 +33,14 @@ function StatChip({ label, value }) {
   )
 }
 
+function HelpIcon({ text }) {
+  return (
+    <button className="companion-help" type="button" title={text} aria-label={text}>
+      ?
+    </button>
+  )
+}
+
 function ScoreCard({ label, value, tone, helper, percent }) {
   return (
     <div className="companion-score-card">
@@ -60,7 +68,11 @@ export default function Companion({ username, variant = "full", onNavigate }) {
     try {
       if (!pollingEnabled) return
       setError(null)
-      const response = await apiFetch(`/companion/${username}/summary`, { timeoutMs: 20000 })
+      const response = await apiFetch(`/companion/${username}/summary`, {
+        timeoutMs: 20000,
+        cacheKey: `companion:${username}`,
+        cacheTtlMs: 45000,
+      })
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           setPollingEnabled(false)
@@ -147,18 +159,39 @@ export default function Companion({ username, variant = "full", onNavigate }) {
   const trendText = trendLabel(trend)
   const trendClass = trendTone(trend)
 
+  const renderStageArt = () => (
+    <div className="companion-art">
+      <span className="companion-art-orbit companion-art-orbit--a" />
+      <span className="companion-art-orbit companion-art-orbit--b" />
+      <span className="companion-art-petal companion-art-petal--1" />
+      <span className="companion-art-petal companion-art-petal--2" />
+      <span className="companion-art-petal companion-art-petal--3" />
+      <span className="companion-art-petal companion-art-petal--4" />
+      <span className="companion-art-petal companion-art-petal--5" />
+      <span className="companion-art-petal companion-art-petal--6" />
+      <span className="companion-art-core">
+        <span>{visual_stage}</span>
+      </span>
+      <span className="companion-art-spark companion-art-spark--1" />
+      <span className="companion-art-spark companion-art-spark--2" />
+    </div>
+  )
+
   if (isSummary) {
     return (
       <div className="companion-container companion-shell companion-shell--summary">
         <div className="companion-summary-header">
           <div className="companion-stage companion-stage--summary">
             <div className="companion-stage-glow" />
-            <div className="companion-visual">{visual_stage}</div>
+            {renderStageArt()}
             <div className="heartbeat">💓</div>
           </div>
 
           <div className="companion-copy">
-            <div className="companion-kicker">Companion</div>
+            <div className="companion-kicker">
+              Companion
+              <HelpIcon text="The companion reflects your consistency, energy, and recovery. It grows as you log, rest, and keep your streak alive." />
+            </div>
             <h3>{level_name}</h3>
             <p>
               <span className="companion-mood-emoji">{mood_emoji}</span>
@@ -207,12 +240,15 @@ export default function Companion({ username, variant = "full", onNavigate }) {
       <div className="companion-hero">
         <div className="companion-stage companion-stage--full">
           <div className="companion-stage-glow" />
-          <div className="companion-visual">{visual_stage}</div>
+          {renderStageArt()}
           <div className="heartbeat">💓</div>
         </div>
 
         <div className="companion-copy companion-copy--full">
-          <div className="companion-kicker">Pulse companion</div>
+          <div className="companion-kicker">
+            Pulse companion
+            <HelpIcon text="This companion is a living summary of your streak, recovery, performance, and burnout trends." />
+          </div>
           <h2>{level_name}</h2>
           <p>
             {mood_emoji} {moodLabel} · level {level}
