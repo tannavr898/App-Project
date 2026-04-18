@@ -2,6 +2,8 @@ import { useEffect, useState } from "react"
 import { apiFetch, getCachedJson } from "../api"
 import "../styles/Companion.css"
 
+const companionMemory = new Map()
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 const toNumber = (value) => {
   const parsed = Number(value)
@@ -41,19 +43,13 @@ function HelpIcon({ text }) {
   )
 }
 
-function ScoreCard({ label, value, tone, helper, percent }) {
-  return (
-    <div className="companion-score-card">
-      <div className="companion-score-head">
-        <span className="companion-score-label">{label}</span>
-        <span className={`companion-score-value tone-${tone}`}>{value}</span>
-      </div>
-      <div className="companion-meter">
-        <div className={`companion-meter-fill tone-${tone}`} style={{ width: `${clamp(percent, 0, 100)}%` }} />
-      </div>
-      <div className="companion-score-helper">{helper}</div>
-    </div>
-  )
+function sceneClassForLevel(level) {
+  if (level <= 2) return "scene-seed"
+  if (level <= 4) return "scene-flower"
+  if (level <= 6) return "scene-woods"
+  if (level <= 8) return "scene-lake"
+  if (level <= 9) return "scene-river"
+  return "scene-rainforest"
 }
 
 function SectionTitle({ label, help }) {
@@ -67,7 +63,7 @@ function SectionTitle({ label, help }) {
 
 export default function Companion({ username, variant = "full", onNavigate }) {
   const cacheKey = `companion:${username}`
-  const cachedCompanion = getCachedJson(cacheKey, 120000)
+  const cachedCompanion = companionMemory.get(username) || getCachedJson(cacheKey, 120000)
   const [companion, setCompanion] = useState(cachedCompanion)
   const [loading, setLoading] = useState(!cachedCompanion)
   const [error, setError] = useState(null)
@@ -91,6 +87,7 @@ export default function Companion({ username, variant = "full", onNavigate }) {
         throw new Error(`Failed to fetch companion: ${response.statusText}`)
       }
       const data = await response.json()
+      companionMemory.set(username, data)
       setCompanion(data)
     } catch (err) {
       console.error("Companion fetch error:", err)
@@ -146,7 +143,6 @@ export default function Companion({ username, variant = "full", onNavigate }) {
     xp_current,
     xp_to_level_up,
     level_progress_pct,
-    visual_stage,
     mood_trend,
     mood_emoji,
     streak,
@@ -171,19 +167,29 @@ export default function Companion({ username, variant = "full", onNavigate }) {
   const trend = performance_influence?.trend
   const trendText = trendLabel(trend)
   const trendClass = trendTone(trend)
+  const sceneClass = sceneClassForLevel(level)
+  const pulseMode = burnoutScore >= 65 && performanceScore <= 45
+    ? "low"
+    : (burnoutScore <= 35 && performanceScore >= 70 ? "perfect" : "medium")
+  const trendImpactText = `Performance ${performanceScore.toFixed(0)}/100, burnout ${burnoutScore.toFixed(0)}/100`
+
   const renderStageArt = () => (
-    <div className="companion-art">
+    <div className={`companion-art companion-art--${pulseMode}`}>
       <span className="companion-art-orbit companion-art-orbit--a" />
       <span className="companion-art-orbit companion-art-orbit--b" />
-      <span className={`companion-energy companion-energy--${trendClass}`} />
+      <span className={`companion-energy companion-energy--${trendClass} companion-energy--${pulseMode}`} />
       <span className="companion-art-petal companion-art-petal--1" />
       <span className="companion-art-petal companion-art-petal--2" />
       <span className="companion-art-petal companion-art-petal--3" />
       <span className="companion-art-petal companion-art-petal--4" />
       <span className="companion-art-petal companion-art-petal--5" />
       <span className="companion-art-petal companion-art-petal--6" />
-      <span className="companion-art-core">
-        <span>{level_name}</span>
+      <span className={`companion-art-core ${sceneClass}`}>
+        <span className="companion-scene-ground" />
+        <span className="companion-scene-tree companion-scene-tree--1" />
+        <span className="companion-scene-tree companion-scene-tree--2" />
+        <span className="companion-scene-tree companion-scene-tree--3" />
+        <span className="companion-scene-water" />
       </span>
       <span className="companion-art-spark companion-art-spark--1" />
       <span className="companion-art-spark companion-art-spark--2" />
@@ -295,7 +301,7 @@ export default function Companion({ username, variant = "full", onNavigate }) {
             <div className="comeback-badge comeback-badge--wide">🎯 Return bonus: +{comeback_bonus_xp} XP</div>
           )}
           <div className="companion-dialogue companion-dialogue--compact">
-            Keep logging daily. Your companion gets stronger with every check-in.
+            Keep logging daily. This ecosystem expands and smooths out as performance rises and burnout stays in check.
           </div>
         </div>
       </div>
@@ -318,28 +324,16 @@ export default function Companion({ username, variant = "full", onNavigate }) {
 
           <div className="companion-panel">
             <SectionTitle
-              label="Your influence"
-              help="Performance rises when the week is going well. Burnout rises when recovery and stress start to slip."
+              label="Trend impact"
+              help="Your trend is driven by recent score movement. Better performance with lower burnout creates smoother, stronger pulse behavior."
             />
-            <div className="companion-score-grid">
-              <ScoreCard
-                label="Performance"
-                value={`${performanceScore.toFixed(0)}/100`}
-                tone="performance"
-                helper="Higher means the companion feels more energized."
-                percent={performanceScore}
-              />
-              <ScoreCard
-                label="Burnout"
-                value={`${burnoutScore.toFixed(0)}/100`}
-                tone="burnout"
-                helper="Lower is better for recovery and growth."
-                percent={burnoutScore}
-              />
-            </div>
             <div className={`companion-trend companion-trend--${trendClass}`}>
               <span>Trend: {trendText}</span>
               <HelpIcon text="Trend is computed from the recent performance trend, not just today’s entry." />
+            </div>
+            <div className="companion-trend-impact-copy">{trendImpactText}</div>
+            <div className="companion-trend-impact-copy">
+              Pulse behavior: {pulseMode === "low" ? "erratic" : pulseMode === "medium" ? "steady with jumps" : "smooth long waves"}
             </div>
           </div>
         </div>
