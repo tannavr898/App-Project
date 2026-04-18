@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from typing import Optional
 
 
 class StudentData:
@@ -11,13 +12,23 @@ class StudentData:
     - Burnout Calculation
     """
     
-    def __init__(self, csv_path):
-        self.df = pd.read_csv(csv_path)
+    def __init__(self, csv_path=None, dataframe: Optional[pd.DataFrame] = None):
+        if dataframe is not None:
+            self.df = dataframe.copy()
+        elif csv_path is not None:
+            self.df = pd.read_csv(csv_path)
+        else:
+            self.df = pd.DataFrame()
         self._prepare_dataframes()
         self._compute_features()
         
     # --------------------------------------------------------
     def _prepare_dataframes(self):
+        if self.df.empty:
+            return
+        if 'date' not in self.df.columns:
+            self.df = pd.DataFrame()
+            return
         self.df['date'] = pd.to_datetime(self.df['date'])
         self.df = self.df.sort_values('date').reset_index(drop=True)
         self.df = self.df.dropna().reset_index(drop=True)
@@ -25,6 +36,9 @@ class StudentData:
     # --------------------------------------------------------
     def _compute_features(self):
         df = self.df
+        if df.empty:
+            self.df = df
+            return
         
         # Sleep Deficit
         df['sleep_deficit'] = np.maximum(0, 8 - df['sleep_hours'])

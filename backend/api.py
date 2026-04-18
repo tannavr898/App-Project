@@ -19,6 +19,16 @@ from pywebpush import webpush, WebPushException
 from fastapi import UploadFile, File
 
 from auth import register_user, authenticate_user, create_token, decode_token
+from data_store import (
+    ensure_database,
+    get_entries_dataframe,
+    get_entries_version,
+    get_entry_row,
+    get_user,
+    has_entries,
+    list_users as store_list_users,
+    upsert_entry,
+)
 from student_data import StudentData
 from performance_model import PerformanceModel
 from recommendation_engine import RecommendationEngine
@@ -32,11 +42,7 @@ _analysis_cache_lock = threading.Lock()
 
 
 def _csv_version(username: str) -> str:
-    path = get_user_file(username)
-    if not os.path.exists(path):
-        return ""
-    stat = os.stat(path)
-    return f"{stat.st_mtime_ns}:{stat.st_size}"
+    return get_entries_version(username)
 
 
 def _invalidate_user_cache(username: str):
@@ -92,6 +98,7 @@ def _rate_limit_key(request: Request, scope: str, user_hint: str = "") -> str:
 # App + CORS
 # --------------------------------------------------
 app = FastAPI(title="Student Wellness API")
+ensure_database()
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -243,7 +250,9 @@ def get_user_file(username: str) -> str:
     return os.path.join(USERS_DIR, f"{username}.csv")
 
 def user_exists(username: str) -> bool:
-    return os.path.exists(get_user_file(username))
+    if username.strip().lower() == "dev":
+        return True
+    return get_user(username) is not None or has_entries(username)
 
 # --------------------------------------------------
 # Push helpers
@@ -352,7 +361,7 @@ def _has_unfinished_tasks(username: str) -> bool:
 def _needs_log_entry(username: str) -> bool:
     if not user_exists(username):
         return False
-    df = pd.read_csv(get_user_file(username))
+    df = get_entries_dataframe(username)
     if df.empty or "date" not in df.columns:
         return True
     today = _today_date()
@@ -401,7 +410,11 @@ def build_analysis(username: str) -> dict:
 
     started = perf_counter()
 
-    data = StudentData(get_user_file(username))
+    entries_df = get_entries_dataframe(username)
+    if entries_df.empty:
+        raise HTTPException(status_code=400, detail="Not enough data yet")
+
+    data = StudentData(dataframe=entries_df)
     df   = data.get_dataframe()
 
     perf_model = PerformanceModel()
@@ -470,9 +483,6 @@ def register(req: RegisterRequest, request: Request):
     try:
         user  = register_user(req.username, req.password)
         token = create_token(user["username"])
-        # Create empty CSV for new user
-        if not user_exists(req.username):
-            pd.DataFrame().to_csv(get_user_file(req.username), index=False)
         return {"username": user["username"], "token": token}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -490,7 +500,7 @@ def login(req: LoginRequest, request: Request):
     token = create_token(user["username"])
 
     # Seed dev account with sample data on first login
-    if user.get("is_dev") and not user_exists("dev"):
+    if user.get("is_dev") and not has_entries("dev"):
         _seed_dev_data()
 
     return {"username": user["username"], "token": token}
@@ -529,7 +539,16 @@ def _seed_dev_data():
         "fatigue":        fatigue,
         "productivity":   productivity,
     })
-    df.to_csv(get_user_file("dev"), index=False)
+    for _, row in df.iterrows():
+        upsert_entry("dev", {
+            "date": row["date"],
+            "sleep_hours": row["sleep_hours"],
+            "study_hours": row["study_hours"],
+            "training_hours": row["training_hours"],
+            "stress": row["stress"],
+            "fatigue": row["fatigue"],
+            "productivity": row["productivity"],
+        })
 
 
 @app.post("/dev/reset")
@@ -546,11 +565,7 @@ def reset_dev_data(current_user: str = Depends(get_current_user)):
 # --------------------------------------------------
 @app.get("/users")
 def list_users(current_user: str = Depends(get_current_user)):
-    users = [
-        f.replace(".csv", "")
-        for f in os.listdir(USERS_DIR)
-        if f.endswith(".csv")
-    ]
+    users = store_list_users()
     return {"users": users}
 
 
@@ -610,7 +625,7 @@ def get_analysis(
         raise HTTPException(status_code=429, detail="Too many analysis requests. Please wait and retry.")
     if not user_exists(username):
         raise HTTPException(status_code=404, detail="User not found")
-    if sum(1 for _ in open(get_user_file(username))) < 3:
+    if len(get_entries_dataframe(username)) < 3:
         raise HTTPException(status_code=400, detail="Not enough data yet")
     return build_analysis(username)
 
@@ -624,8 +639,7 @@ def get_entries(
         raise HTTPException(status_code=403, detail="Username mismatch")
     if not user_exists(username):
         raise HTTPException(status_code=404, detail="User not found")
-    df = pd.read_csv(get_user_file(username))
-    df["date"] = df["date"].astype(str)
+    df = get_entries_dataframe(username)
     return {"entries": df.to_dict(orient="records")}
 
 
@@ -656,14 +670,16 @@ async def import_csv(
         missing = required_cols - set(imported_df.columns)
         raise HTTPException(status_code=400, detail=f"Missing columns: {missing}")
 
-    user_file = get_user_file(username)
-    if os.path.exists(user_file):
-        existing_df = pd.read_csv(user_file)
-        combined    = pd.concat([existing_df, imported_df], ignore_index=True)
-        combined    = combined.drop_duplicates(subset="date", keep="last")
-        combined.to_csv(user_file, index=False)
-    else:
-        imported_df.to_csv(user_file, index=False)
+    for _, row in imported_df.iterrows():
+        upsert_entry(username, {
+            "date": str(row["date"])[:10],
+            "sleep_hours": row["sleep_hours"],
+            "study_hours": row["study_hours"],
+            "training_hours": row["training_hours"],
+            "stress": row["stress"],
+            "fatigue": row["fatigue"],
+            "productivity": row["productivity"],
+        })
 
     _invalidate_user_cache(username)
     return {"message": "Imported successfully", "rows": len(imported_df)}
@@ -683,12 +699,7 @@ def add_entry(
     if not _entry_limiter.is_allowed(rl_key):
         raise HTTPException(status_code=429, detail="Too many entry updates. Please wait and retry.")
 
-    user_file = get_user_file(entry.username)
-
-    if os.path.exists(user_file):
-        df = pd.read_csv(user_file)
-    else:
-        df = pd.DataFrame()
+    existing_row = get_entry_row(entry.username, entry.date)
 
     new_row = {
         "date":           entry.date,
@@ -700,34 +711,25 @@ def add_entry(
         "productivity":   entry.productivity,
     }
 
-    # Remove any existing entry for the same date
-    existing_same_day = None
-    if not df.empty and "date" in df.columns:
-        same_day = df[df["date"].astype(str).str[:10] == str(entry.date)[:10]]
-        if not same_day.empty:
-            existing_same_day = same_day.iloc[-1].to_dict()
-        df = df[df["date"].astype(str).str[:10] != str(entry.date)[:10]]
-
-    if existing_same_day is not None:
+    if existing_row is not None:
         unchanged = (
-            str(existing_same_day.get("date", ""))[:10] == str(entry.date)[:10]
-            and float(existing_same_day.get("sleep_hours", -1)) == float(entry.sleep_hours)
-            and float(existing_same_day.get("study_hours", -1)) == float(entry.study_hours)
-            and float(existing_same_day.get("training_hours", -1)) == float(entry.training_hours)
-            and int(existing_same_day.get("stress", -1)) == int(entry.stress)
-            and int(existing_same_day.get("fatigue", -1)) == int(entry.fatigue)
-            and int(existing_same_day.get("productivity", -1)) == int(entry.productivity)
+            float(existing_row.get("sleep_hours", -1)) == float(entry.sleep_hours)
+            and float(existing_row.get("study_hours", -1)) == float(entry.study_hours)
+            and float(existing_row.get("training_hours", -1)) == float(entry.training_hours)
+            and int(existing_row.get("stress", -1)) == int(entry.stress)
+            and int(existing_row.get("fatigue", -1)) == int(entry.fatigue)
+            and int(existing_row.get("productivity", -1)) == int(entry.productivity)
         )
         if unchanged:
             logger.info("entry_noop username=%s date=%s", entry.username, entry.date)
-            return {"message": "Entry unchanged", "total_entries": len(df) + 1}
+            total_entries = len(get_entries_dataframe(entry.username))
+            return {"message": "Entry unchanged", "total_entries": total_entries}
 
-    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-    df = df.sort_values("date").reset_index(drop=True)
-    df.to_csv(user_file, index=False)
+    upsert_entry(entry.username, new_row)
     _invalidate_user_cache(entry.username)
 
-    return {"message": "Entry saved", "total_entries": len(df)}
+    total_entries = len(get_entries_dataframe(entry.username))
+    return {"message": "Entry saved", "total_entries": total_entries}
 
 # --------------------------------------------------
 # Task routes

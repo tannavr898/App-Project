@@ -1,4 +1,3 @@
-import json
 import os
 from datetime import datetime, timedelta
 from typing import Optional
@@ -6,30 +5,15 @@ from typing import Optional
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 
+from data_store import ensure_database, get_user, upsert_user
+
 SECRET_KEY = os.environ.get("PULSE_SECRET", "pulse-dev-secret-change-in-production")
 ALGORITHM  = "HS256"
 TOKEN_EXPIRE_DAYS = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-USERS_FILE = "users/auth.json"
-
-
-def _load_auth() -> dict:
-    os.makedirs("users", exist_ok=True)
-    if not os.path.exists(USERS_FILE):
-        return {}
-    with open(USERS_FILE) as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return {}
-
-
-def _save_auth(data: dict):
-    os.makedirs("users", exist_ok=True)
-    with open(USERS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+ensure_database()
 
 
 def register_user(username: str, password: str) -> dict:
@@ -43,16 +27,15 @@ def register_user(username: str, password: str) -> dict:
     if len(password) < 6:
         raise ValueError("Password must be at least 6 characters.")
 
-    auth = _load_auth()
-    if username in auth:
+    if get_user(username) is not None:
         raise ValueError("Username already taken.")
 
-    auth[username] = {
-        "username":      username,
-        "password_hash": pwd_context.hash(password),
-        "created_at":    datetime.utcnow().isoformat(),
-    }
-    _save_auth(auth)
+    upsert_user(
+        username=username,
+        password_hash=pwd_context.hash(password),
+        created_at=datetime.utcnow().isoformat(),
+        is_dev=False,
+    )
     return {"username": username}
 
 
@@ -77,9 +60,12 @@ def authenticate_user(username: str, password: str) -> Optional[dict]:
             return {"username": DEV_USERNAME, "is_dev": True}
         return None
 
-    auth = _load_auth()
-    user = auth.get(username)
+    user = get_user(username)
     if not user:
+        return None
+    if user.get("is_dev"):
+        if password == DEV_PASSWORD:
+            return {"username": DEV_USERNAME, "is_dev": True}
         return None
     if not pwd_context.verify(password, user["password_hash"]):
         return None
