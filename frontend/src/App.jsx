@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { Analytics } from "@vercel/analytics/react"
 import Dashboard from "./components/Dashboard"
 import LogEntry from "./components/LogEntry"
 import Tasks from "./components/Tasks"
@@ -97,6 +98,7 @@ export default function App() {
       overflow: "hidden",
       transition: "background 0.25s, color 0.25s",
     }}>
+      <Analytics />
       {!user ? (
         <UserSelect onSelect={setUser} />
       ) : isMobile ? (
