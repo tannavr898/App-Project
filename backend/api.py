@@ -38,9 +38,26 @@ def _csv_hash(username: str) -> str:
 # --------------------------------------------------
 app = FastAPI(title="Student Wellness API")
 
+default_origins = {
+    "https://pulsewellness.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:5173",
+}
+
+frontend_url = os.environ.get("FRONTEND_URL", "").strip()
+if frontend_url:
+    default_origins.add(frontend_url)
+
+frontend_urls = os.environ.get("FRONTEND_URLS", "").strip()
+if frontend_urls:
+    for origin in frontend_urls.split(","):
+        origin = origin.strip()
+        if origin:
+            default_origins.add(origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://app-project-uk97.vercel.app", "http://localhost:3000", "http://localhost:5173"],
+    allow_origins=sorted(default_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
