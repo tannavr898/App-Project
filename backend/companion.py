@@ -415,7 +415,11 @@ def compute_companion_summary(username: str, analysis_result: dict | None = None
 
     # Core metrics
     streak = get_current_streak(username)
-    last_date = df.iloc[-1].get("date", pd.Timestamp.now()).strftime("%Y-%m-%d") if len(df) > 0 else None
+    if len(df) > 0:
+        raw_last_date = df.iloc[-1].get("date", pd.Timestamp.now())
+        last_date = pd.to_datetime(raw_last_date).strftime("%Y-%m-%d")
+    else:
+        last_date = None
     entry_count = len(df)
 
     # XP & level

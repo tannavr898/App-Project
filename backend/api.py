@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
@@ -313,7 +314,7 @@ async def telemetry_middleware(request: Request, call_next):
             request.url.path,
             elapsed_ms,
         )
-        raise
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
     elapsed_ms = (perf_counter() - started) * 1000
     response.headers["x-response-time-ms"] = f"{elapsed_ms:.2f}"
