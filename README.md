@@ -94,9 +94,14 @@ Create a `.env` file in your `backend/` folder:
 ```
 PULSE_SECRET=your-long-random-secret-key
 FRONTEND_URL=https://your-frontend.vercel.app
+PULSE_DATA_DIR=/home/ubuntu/.pulse
+# Optional: override the exact SQLite file path
+# PULSE_DB_PATH=/home/ubuntu/.pulse/pulse.db
 ```
 
 For local development the defaults work fine. For production, generate a real secret key and set `FRONTEND_URL` to your deployed frontend URL.
+
+By default, the SQLite database now lives outside the repo under your home directory (`~/.pulse/pulse.db`) so Git pulls will not overwrite user data. If an older `users/pulse.db` exists, the backend copies it to the new location on startup.
 
 ---
 

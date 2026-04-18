@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -9,7 +10,28 @@ import pandas as pd
 
 
 USERS_DIR = "users"
-DB_PATH = os.environ.get("PULSE_DB_PATH", os.path.join(USERS_DIR, "pulse.db"))
+LEGACY_DB_PATH = os.path.join(USERS_DIR, "pulse.db")
+DEFAULT_DATA_DIR = os.environ.get("PULSE_DATA_DIR", os.path.join(os.path.expanduser("~"), ".pulse"))
+
+
+def _resolve_db_path() -> str:
+    configured = os.environ.get("PULSE_DB_PATH")
+    if not configured:
+        return os.path.join(DEFAULT_DATA_DIR, "pulse.db")
+
+    configured_abs = os.path.abspath(configured)
+    legacy_abs = os.path.abspath(LEGACY_DB_PATH)
+    users_dir_abs = os.path.abspath(USERS_DIR)
+
+    if configured_abs == legacy_abs:
+        return os.path.join(DEFAULT_DATA_DIR, "pulse.db")
+    if os.path.commonpath([configured_abs, users_dir_abs]) == users_dir_abs:
+        return os.path.join(DEFAULT_DATA_DIR, "pulse.db")
+
+    return configured
+
+
+DB_PATH = _resolve_db_path()
 DEV_USERNAME = "dev"
 DEV_PASSWORD_PLACEHOLDER_HASH = "dev_account_local_only"
 
@@ -23,6 +45,20 @@ def _now_iso() -> str:
 
 def _ensure_parent_dir() -> None:
     os.makedirs(USERS_DIR, exist_ok=True)
+    db_parent = os.path.dirname(os.path.abspath(DB_PATH))
+    os.makedirs(db_parent, exist_ok=True)
+
+
+def _migrate_legacy_database() -> None:
+    if os.path.abspath(DB_PATH) == os.path.abspath(LEGACY_DB_PATH):
+        return
+    if os.path.exists(DB_PATH):
+        return
+    if not os.path.exists(LEGACY_DB_PATH):
+        return
+
+    os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
+    shutil.copy2(LEGACY_DB_PATH, DB_PATH)
 
 
 @contextmanager
@@ -48,6 +84,7 @@ def ensure_database() -> None:
         if _db_ready:
             return
         _ensure_parent_dir()
+        _migrate_legacy_database()
         with get_connection() as conn:
             conn.executescript(
                 """
