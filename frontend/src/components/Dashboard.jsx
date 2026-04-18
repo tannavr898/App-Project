@@ -433,7 +433,7 @@ export default function Dashboard({ username, onNavigate }) {
       </div>
 
       {/* Companion */}
-      <Companion username={username} />
+      <Companion username={username} variant="summary" onNavigate={onNavigate} />
 
       {/* Tasks bar */}
       <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",padding:"12px 16px"}}>

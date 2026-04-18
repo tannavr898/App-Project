@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import Dashboard from "./components/Dashboard"
+import Companion from "./components/Companion"
 import LogEntry from "./components/LogEntry"
 import Tasks from "./components/Tasks"
 import UserSelect from "./components/UserSelect"
@@ -111,6 +112,7 @@ export default function App() {
   const navItems = [
     { id: "log",       label: "Log Entry" },
     { id: "dashboard", label: "Overview" },
+    { id: "companion", label: "Companion" },
     { id: "tasks",     label: "Tasks" },
   ]
 
@@ -131,6 +133,7 @@ export default function App() {
           {/* Main Content */}
           <main className="mobile-main" style={{flex: 1, overflowY: "auto", paddingBottom: "70px", background: vars["--bg"]}}>
             {page === "dashboard" && <Dashboard username={user} onNavigate={setPage} />}
+            {page === "companion" && <Companion username={user} onNavigate={setPage} />}
             {page === "log"       && <LogEntry  username={user} onSaved={() => setPage("dashboard")} />}
             {page === "tasks"     && <Tasks     username={user} />}
           </main>
@@ -205,6 +208,7 @@ export default function App() {
               {[
                 { id: "dashboard", label: "Overview" },
                 { id: "log",       label: "Log entry" },
+                { id: "companion", label: "Companion" },
                 { id: "tasks",     label: "Tasks" },
               ].map(item => (
                 <button
@@ -231,6 +235,7 @@ export default function App() {
 
           <main className="main">
             {page === "dashboard" && <Dashboard username={user} onNavigate={setPage} />}
+            {page === "companion" && <Companion username={user} onNavigate={setPage} />}
             {page === "log"       && <LogEntry  username={user} onSaved={() => setPage("dashboard")} />}
             {page === "tasks"     && <Tasks     username={user} />}
           </main>
