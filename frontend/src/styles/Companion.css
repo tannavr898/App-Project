@@ -68,13 +68,16 @@
 .companion-full-layout {
   display: grid;
   grid-template-columns: minmax(280px, 36vw) 1fr;
-  gap: 22px;
+  gap: 30px;
   width: 100%;
   align-items: start;
 }
 
 .companion-full-content {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
 }
 
 .companion-summary-header,
@@ -97,11 +100,11 @@
   max-width: none;
   width: 100%;
   margin: 0 auto;
-  gap: 18px;
+  gap: 30px;
 }
 
 .companion-shell--full .companion-column {
-  gap: 18px;
+  gap: 24px;
 }
 
 .companion-hero {
@@ -129,8 +132,9 @@
 }
 
 .companion-stage--full {
-  width: min(260px, 78vw);
-  min-height: 260px;
+  width: min(100%, 440px);
+  aspect-ratio: 1 / 1;
+  min-height: 0;
   border-radius: 34px;
 }
 
@@ -363,13 +367,18 @@
 }
 
 .companion-stage--summary-dominant {
-  width: 100%;
-  min-height: 210px;
+  width: min(100%, 1040px);
+  margin: 0 auto;
+  aspect-ratio: 9 / 2.35;
+  min-height: 190px;
+  max-height: 290px;
   border-radius: 18px;
 }
 
 .companion-stage--full-left {
-  min-height: 420px;
+  min-height: 0;
+  justify-self: stretch;
+  align-self: start;
 }
 
 .companion-open-fab {
@@ -751,7 +760,7 @@
   border: 0;
   border-top: 1px solid var(--border);
   border-radius: 0;
-  padding: 18px 0 0;
+  padding: 24px 0 0;
   text-align: left;
 }
 
@@ -781,11 +790,11 @@
 
 .companion-bullet-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .companion-bullet-list div {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: var(--radius-md);
   background: var(--bg);
   border: 1px solid var(--border);
@@ -957,11 +966,11 @@
 @media (max-width: 900px) {
   .companion-full-layout {
     grid-template-columns: 1fr;
-    gap: 14px;
+    gap: 18px;
   }
 
   .companion-stage--full-left {
-    min-height: 320px;
+    min-height: 0;
   }
 
   .companion-grid,
@@ -975,12 +984,12 @@
   }
 
   .companion-stage--full {
-    width: min(240px, 86vw);
-    min-height: 240px;
+    width: min(100%, 360px);
+    aspect-ratio: 1 / 1;
   }
 
   .companion-shell--full .companion-panel {
-    padding-top: 14px;
+    padding-top: 18px;
   }
 
   .companion-summary-grid,
@@ -999,6 +1008,17 @@
 
   .companion-shell--full .companion-grid {
     max-width: none;
+    gap: 22px;
+  }
+
+  .companion-full-content {
+    gap: 20px;
+  }
+
+  .companion-stage--summary-dominant {
+    aspect-ratio: 3 / 1;
+    min-height: 170px;
+    max-height: 240px;
   }
 }
 
@@ -1014,12 +1034,14 @@
   }
 
   .companion-stage--full {
-    width: min(210px, 88vw);
-    min-height: 210px;
+    width: min(100%, 300px);
+    aspect-ratio: 1 / 1;
   }
 
   .companion-stage--summary-dominant {
-    min-height: 170px;
+    aspect-ratio: 5 / 2;
+    min-height: 150px;
+    max-height: 200px;
   }
 
   .companion-stage--full-left {
