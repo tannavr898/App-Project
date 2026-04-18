@@ -264,44 +264,41 @@ export default function Dashboard({ username, onNavigate }) {
       setLoading(true)
       setError(null)
       try {
-        // Parallel fetches
-        const [analysisRes, entriesRes] = await Promise.allSettled([
-          apiFetch(`/users/${username}/analysis`),
-          apiFetch(`/users/${username}/entries`)
-        ])
-
-        // Handle analysis
-        if (analysisRes.status === 'fulfilled') {
-          const r = analysisRes.value
-          if (!r.ok) {
-            const errText = await r.text()
-            if (errText.includes('Not enough data yet')) {
-              setError(errText)
-            } else {
+        const fetchAnalysis = async () => {
+          for (let attempt = 0; attempt < 12; attempt += 1) {
+            const r = await apiFetch(`/users/${username}/analysis`)
+            if (r.status === 202) {
+              await new Promise(resolve => setTimeout(resolve, 1200))
+              continue
+            }
+            if (!r.ok) {
+              const errText = await r.text()
+              if (errText.includes('Not enough data yet')) {
+                throw new Error(errText)
+              }
               throw new Error(errText || 'Analysis failed')
             }
-          } else {
-            const d = await r.json()
-            setData(d)
-
-            // Fetch tasks based on plan
-            const recMode = d.recommended_mode || 'comfortable'
-            const recPlan = d.plans?.[recMode] || d.optimal_plan
-            const tasksRes = await apiFetch(`/tasks/${username}?recommended_hours=${recPlan?.study ?? 3.5}`)
-            const t = await tasksRes.json()
-            setTasks(t.tasks || [])
-            setProgress(t.progress || null)
+            return await r.json()
           }
-        } else {
-          throw analysisRes.reason
+          throw new Error('Analysis is still processing. Try again in a moment.')
         }
 
-        // Handle entries
-        if (entriesRes.status === 'fulfilled') {
-          const r = entriesRes.value
-          const d = r.ok ? await r.json() : { entries: [] }
-          setEntries(d.entries || [])
-        }
+        const entriesPromise = apiFetch(`/users/${username}/entries`)
+        const d = await fetchAnalysis()
+        setData(d)
+
+        // Fetch tasks based on plan
+        const recMode = d.recommended_mode || 'comfortable'
+        const recPlan = d.plans?.[recMode] || d.optimal_plan
+        const tasksRes = await apiFetch(`/tasks/${username}?recommended_hours=${recPlan?.study ?? 3.5}`)
+        const t = await tasksRes.json()
+        setTasks(t.tasks || [])
+        setProgress(t.progress || null)
+
+        // Entries can load independently
+        const entriesRes = await entriesPromise
+        const entriesData = entriesRes.ok ? await entriesRes.json() : { entries: [] }
+        setEntries(entriesData.entries || [])
 
       } catch (e) {
         setError(e.message || 'Failed to load dashboard data')

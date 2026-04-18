@@ -13,6 +13,7 @@ import logging
 import importlib
 import numpy as np
 from collections import defaultdict, deque
+from concurrent.futures import ThreadPoolExecutor
 from time import perf_counter
 from pywebpush import webpush, WebPushException
 
@@ -66,10 +67,16 @@ except ImportError:
 # --------------------------------------------------
 _analysis_cache = {}
 _analysis_cache_lock = threading.Lock()
+_analysis_executor = ThreadPoolExecutor(max_workers=int(os.environ.get("ANALYSIS_WORKERS", "1")))
+_analysis_jobs = {}
+_analysis_jobs_lock = threading.Lock()
 
 
 def _csv_version(username: str) -> str:
-    return get_entries_version(username)
+    try:
+        return int(get_entries_version(username))
+    except Exception:
+        return 0
 
 
 def _invalidate_user_cache(username: str):
@@ -120,6 +127,112 @@ def _rate_limit_key(request: Request, scope: str, user_hint: str = "") -> str:
     ip = forwarded or (request.client.host if request.client else "unknown")
     hint = user_hint.strip().lower()
     return f"{scope}:{ip}:{hint}"
+
+
+def _build_analysis_result(username: str) -> tuple[str, dict]:
+    version = _csv_version(username)
+
+    entries_df = get_entries_dataframe(username)
+    if entries_df.empty:
+        raise HTTPException(status_code=400, detail="Not enough data yet")
+
+    data = StudentData(dataframe=entries_df)
+    df = data.get_dataframe()
+
+    perf_model = PerformanceModel()
+    perf_model.train(df)
+    df = perf_model.add_performance_score(df)
+
+    baselines = perf_model.get_baselines(df)
+    profile = perf_model.get_user_profile() if perf_model.trained else {}
+
+    plans = {}
+    optimal_plan = None
+    if perf_model.trained:
+        engine = RecommendationEngine(perf_model)
+        plans = engine.find_all_plans(df)
+        recommended_key = plans.get("recommended", "comfortable")
+        optimal_plan = plans.get(recommended_key)
+
+    chart_data = df.tail(30)[
+        [
+            "date", "burnout_risk", "performance_score",
+            "avg_sleep_7", "avg_stress_7", "avg_fatigue_7", "avg_productivity_7",
+        ]
+    ].copy()
+    chart_data["date"] = chart_data["date"].astype(str)
+
+    latest = df.iloc[-1]
+    result = {
+        "latest": {
+            "performance_score":  round(float(latest.get("performance_score", 0)), 1),
+            "burnout_risk":        round(float(latest.get("burnout_risk", 0)), 1),
+            "avg_sleep_7":         round(float(latest["avg_sleep_7"]), 2),
+            "avg_stress_7":        round(float(latest["avg_stress_7"]), 1),
+            "avg_fatigue_7":       round(float(latest["avg_fatigue_7"]), 1),
+            "avg_productivity_7":  round(float(latest["avg_productivity_7"]), 1),
+            "avg_load":            round(float(latest["avg_load"]), 2),
+        },
+        "baselines":        {k: round(float(v), 2) for k, v in baselines.items()},
+        "profile":          {k: round(float(v), 4) for k, v in profile.items()},
+        "optimal_plan":     optimal_plan,
+        "plans":            plans,
+        "recommended_mode": plans.get("recommended", "comfortable"),
+        "chart_data":       chart_data.to_dict(orient="records"),
+        "total_entries":    len(df),
+    }
+    return version, result
+
+
+def _store_analysis_result(username: str, version: str, result: dict) -> None:
+    current_version = _csv_version(username)
+    if current_version != version:
+        return
+    with _analysis_cache_lock:
+        _analysis_cache[username] = {"version": version, "result": result}
+
+
+def _run_analysis_job(username: str, version: str):
+    try:
+        built_version, result = _build_analysis_result(username)
+        _store_analysis_result(username, built_version, result)
+    except Exception as exc:
+        logger.exception("analysis_job_failed username=%s version=%s error=%s", username, version, exc)
+    finally:
+        with _analysis_jobs_lock:
+            state = _analysis_jobs.get(username)
+            if state and state.get("version") == version:
+                state["future"] = None
+            desired_version = state.get("desired_version") if state else None
+
+        current_version = _csv_version(username)
+        if desired_version is not None and current_version and desired_version > version:
+            _schedule_analysis_refresh(username, desired_version)
+
+
+def _schedule_analysis_refresh(username: str, version: str | None = None) -> None:
+    if version is None:
+        version = _csv_version(username)
+    if not version:
+        return
+
+    with _analysis_jobs_lock:
+        state = _analysis_jobs.setdefault(username, {"future": None, "version": None, "desired_version": None})
+        state["desired_version"] = max(int(state["desired_version"] or 0), int(version))
+        active_future = state.get("future")
+        active_version = state.get("version")
+        if active_future and not active_future.done() and active_version == version:
+            return
+        state["version"] = version
+        state["future"] = _analysis_executor.submit(_run_analysis_job, username, version)
+
+
+def _cached_analysis(username: str) -> tuple[str | None, dict | None]:
+    with _analysis_cache_lock:
+        cached = _analysis_cache.get(username)
+        if not cached:
+            return None, None
+        return cached.get("version"), cached.get("result")
 
 # --------------------------------------------------
 # App + CORS
@@ -393,71 +506,27 @@ def _startup_event():
 
 def build_analysis(username: str) -> dict:
     version = _csv_version(username)
-    with _analysis_cache_lock:
-        cached = _analysis_cache.get(username)
-        if cached and cached.get("version") == version:
-            return cached["result"]
+    cached_version, cached_result = _cached_analysis(username)
+    if cached_version == version and cached_result is not None:
+        return cached_result
+
+    with _analysis_jobs_lock:
+        state = _analysis_jobs.get(username)
+        active_future = state.get("future") if state else None
+        active_version = state.get("version") if state else None
+
+    if active_future and not active_future.done():
+        if cached_result is not None:
+            return cached_result
+        raise HTTPException(status_code=202, detail="Analysis is being refreshed. Please retry in a moment.")
 
     started = perf_counter()
-
-    entries_df = get_entries_dataframe(username)
-    if entries_df.empty:
-        raise HTTPException(status_code=400, detail="Not enough data yet")
-
-    data = StudentData(dataframe=entries_df)
-    df   = data.get_dataframe()
-
-    perf_model = PerformanceModel()
-    perf_model.train(df)
-    df = perf_model.add_performance_score(df)
-
-    baselines = perf_model.get_baselines(df)
-    profile   = perf_model.get_user_profile() if perf_model.trained else {}
-
-    plans        = {}
-    optimal_plan = None
-    if perf_model.trained:
-        engine       = RecommendationEngine(perf_model)
-        plans        = engine.find_all_plans(df)
-        recommended_key = plans.get("recommended", "comfortable")
-        optimal_plan = plans.get(recommended_key)
-
-    chart_data = df.tail(30)[
-        [
-            "date", "burnout_risk", "performance_score",
-            "avg_sleep_7", "avg_stress_7", "avg_fatigue_7", "avg_productivity_7",
-        ]
-    ].copy()
-    chart_data["date"] = chart_data["date"].astype(str)
-
-    latest = df.iloc[-1]
-
-    result = {
-        "latest": {
-            "performance_score":  round(float(latest.get("performance_score", 0)), 1),
-            "burnout_risk":        round(float(latest.get("burnout_risk", 0)), 1),
-            "avg_sleep_7":         round(float(latest["avg_sleep_7"]), 2),
-            "avg_stress_7":        round(float(latest["avg_stress_7"]), 1),
-            "avg_fatigue_7":       round(float(latest["avg_fatigue_7"]), 1),
-            "avg_productivity_7":  round(float(latest["avg_productivity_7"]), 1),
-            "avg_load":            round(float(latest["avg_load"]), 2),
-        },
-        "baselines":        {k: round(float(v), 2) for k, v in baselines.items()},
-        "profile":          {k: round(float(v), 4) for k, v in profile.items()},
-        "optimal_plan":     optimal_plan,
-        "plans":            plans,
-        "recommended_mode": plans.get("recommended", "comfortable"),
-        "chart_data":       chart_data.to_dict(orient="records"),
-        "total_entries":    len(df),
-    }
-
-    with _analysis_cache_lock:
-        _analysis_cache[username] = {"version": version, "result": result}
-
+    built_version, result = _build_analysis_result(username)
+    _store_analysis_result(username, built_version, result)
     logger.info(
         "analysis_built username=%s entries=%s duration_ms=%.2f",
         username,
-        len(df),
+        result.get("total_entries", 0),
         (perf_counter() - started) * 1000,
     )
     return result
@@ -539,6 +608,7 @@ def _seed_dev_data():
             "fatigue": row["fatigue"],
             "productivity": row["productivity"],
         })
+    _schedule_analysis_refresh("dev")
 
 
 @app.post("/dev/reset")
@@ -672,6 +742,7 @@ async def import_csv(
         })
 
     _invalidate_user_cache(username)
+    _schedule_analysis_refresh(username)
     return {"message": "Imported successfully", "rows": len(imported_df)}
 
 # --------------------------------------------------
@@ -717,6 +788,7 @@ def add_entry(
 
     upsert_entry(entry.username, new_row)
     _invalidate_user_cache(entry.username)
+    _schedule_analysis_refresh(entry.username)
 
     total_entries = len(get_entries_dataframe(entry.username))
     return {"message": "Entry saved", "total_entries": total_entries}
