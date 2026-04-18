@@ -10,6 +10,8 @@ import pandas as pd
 
 USERS_DIR = "users"
 DB_PATH = os.environ.get("PULSE_DB_PATH", os.path.join(USERS_DIR, "pulse.db"))
+DEV_USERNAME = "dev"
+DEV_PASSWORD_PLACEHOLDER_HASH = "dev_account_local_only"
 
 _db_lock = threading.Lock()
 _db_ready = False
@@ -96,6 +98,14 @@ def ensure_database() -> None:
                     last_sent INTEGER NOT NULL
                 );
                 """
+            )
+            conn.execute(
+                """
+                INSERT INTO users (username, password_hash, created_at, is_dev)
+                VALUES (?, ?, ?, 1)
+                ON CONFLICT(username) DO UPDATE SET is_dev = 1
+                """,
+                (DEV_USERNAME, DEV_PASSWORD_PLACEHOLDER_HASH, _now_iso()),
             )
         _migrate_legacy_data()
         _db_ready = True
