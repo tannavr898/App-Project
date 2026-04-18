@@ -936,37 +936,67 @@ def get_companion_summary(
     if not user_exists(username):
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Get analysis data if available
     try:
-        analysis = build_analysis(username) if len(get_entries_dataframe(username)) >= 3 else None
-    except HTTPException:
-        analysis = None
+        # Get analysis data if available
+        try:
+            analysis = build_analysis(username) if len(get_entries_dataframe(username)) >= 3 else None
+        except HTTPException:
+            analysis = None
 
-    # Compute companion summary
-    summary = compute_companion_summary(username, analysis)
+        # Compute companion summary
+        summary = compute_companion_summary(username, analysis)
 
-    return {
-        "username": username,
-        "level": summary["level"],
-        "level_name": summary.get("level_name", "Seed"),
-        "xp_current": summary["xp_current"],
-        "xp_to_level_up": summary["xp_to_level_up"],
-        "xp_threshold": summary["xp_threshold"],
-        "level_progress_pct": summary["level_progress_pct"],
-        "visual_stage": summary["visual_stage"],
-        "mood_trend": summary["mood_trend"],
-        "mood_emoji": summary.get("mood_emoji", "🌿"),
-        "streak": summary["streak"],
-        "last_activity_date": summary["last_activity_date"],
-        "days_since_activity": summary.get("days_since_activity", 0),
-        "performance_influence": {
-            "current_performance": summary["performance"],
-            "current_burnout": summary["burnout"],
-            "trend": summary["trend"],
-        },
-        "milestones_reached": summary["milestones_reached"],
-        "comeback_available": summary.get("comeback_available", False),
-        "comeback_bonus_xp": summary.get("comeback_bonus_xp", 0),
-        "entry_count": summary["entry_count"],
-        "updated_at": datetime.utcnow().isoformat(),
-    }
+        return {
+            "username": username,
+            "level": summary["level"],
+            "level_name": summary.get("level_name", "Seed"),
+            "xp_current": summary["xp_current"],
+            "xp_to_level_up": summary["xp_to_level_up"],
+            "xp_threshold": summary["xp_threshold"],
+            "level_progress_pct": summary["level_progress_pct"],
+            "visual_stage": summary["visual_stage"],
+            "mood_trend": summary["mood_trend"],
+            "mood_emoji": summary.get("mood_emoji", "🌿"),
+            "streak": summary["streak"],
+            "last_activity_date": summary["last_activity_date"],
+            "days_since_activity": summary.get("days_since_activity", 0),
+            "performance_influence": {
+                "current_performance": summary["performance"],
+                "current_burnout": summary["burnout"],
+                "trend": summary["trend"],
+            },
+            "milestones_reached": summary["milestones_reached"],
+            "comeback_available": summary.get("comeback_available", False),
+            "comeback_bonus_xp": summary.get("comeback_bonus_xp", 0),
+            "entry_count": summary["entry_count"],
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+    except Exception as exc:
+        logger.exception("companion_summary_failed username=%s error=%s", username, exc)
+        # Keep dashboard usable even if companion computation fails.
+        return {
+            "username": username,
+            "level": 1,
+            "level_name": "Seed",
+            "xp_current": 0,
+            "xp_to_level_up": 50,
+            "xp_threshold": 0,
+            "level_progress_pct": 0,
+            "visual_stage": "🌰",
+            "mood_trend": "dormant",
+            "mood_emoji": "🌱",
+            "streak": 0,
+            "last_activity_date": None,
+            "days_since_activity": 0,
+            "performance_influence": {
+                "current_performance": 0,
+                "current_burnout": 0,
+                "trend": "stable",
+            },
+            "milestones_reached": [],
+            "comeback_available": False,
+            "comeback_bonus_xp": 0,
+            "entry_count": 0,
+            "updated_at": datetime.utcnow().isoformat(),
+            "degraded": True,
+        }
