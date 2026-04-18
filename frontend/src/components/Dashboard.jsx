@@ -231,6 +231,7 @@ export default function Dashboard({ username, onNavigate }) {
   const [progress,     setProgress]     = useState(null)
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState(null)
+  const [isFirstRun,   setIsFirstRun]   = useState(false)
   const [selectedMode, setSelectedMode] = useState(() => localStorage.getItem(`pulse-plan-${username}`))
   const [pushStatus,   setPushStatus]   = useState("default")
   const [pushLoading,  setPushLoading]  = useState(false)
@@ -263,6 +264,7 @@ export default function Dashboard({ username, onNavigate }) {
     const loadData = async () => {
       setLoading(true)
       setError(null)
+      setIsFirstRun(false)
       try {
         const fetchAnalysis = async () => {
           for (let attempt = 0; attempt < 12; attempt += 1) {
@@ -301,7 +303,13 @@ export default function Dashboard({ username, onNavigate }) {
         setEntries(entriesData.entries || [])
 
       } catch (e) {
-        setError(e.message || 'Failed to load dashboard data')
+        const message = e?.message || 'Failed to load dashboard data'
+        if (message.includes('Not enough data yet')) {
+          setIsFirstRun(true)
+          setError(null)
+          return
+        }
+        setError(message)
       } finally {
         setLoading(false)
       }
@@ -328,10 +336,29 @@ export default function Dashboard({ username, onNavigate }) {
     setSelectedMode(mode)
   }
 
-  if (loading) return <div className="loading">Loading your data…</div>
+  if (loading) return (
+    <div className="dashboard-loading">
+      <div className="dashboard-loading-title">Preparing your Pulse dashboard</div>
+      <div className="dashboard-loading-subtitle">Analyzing recent trends and building your daily plan...</div>
+      <div className="dashboard-skeleton-grid">
+        <div className="dashboard-skeleton-card" />
+        <div className="dashboard-skeleton-card" />
+        <div className="dashboard-skeleton-card" />
+      </div>
+    </div>
+  )
+
+  if (isFirstRun) return (
+    <div className="welcome-state">
+      <h2>Welcome to Pulse Wellness</h2>
+      <p>Start by logging an entry so we can build your personalized dashboard.</p>
+      <button className="btn-primary" onClick={() => onNavigate("log")}>Log your first entry</button>
+    </div>
+  )
+
   if (error) return (
     <div className="empty-state">
-      <p>{error==="Not enough data yet"?"Keep logging — you need at least a few entries to unlock your dashboard.":`Could not load data: ${error}`}</p>
+      <p>{`Could not load data: ${error}`}</p>
       <button className="btn-primary" onClick={()=>onNavigate("log")}>Log an entry</button>
     </div>
   )
