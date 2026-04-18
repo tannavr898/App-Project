@@ -217,12 +217,12 @@ def compute_instant_mood(sleep_hours: float, stress: int, productivity: int) -> 
 # TREND MOOD (7-DAY ROLLING AVERAGE)
 # ============================================================
 
-def compute_trend_mood(performance: float, burnout: float, streak: int) -> str:
+def compute_trend_mood(username: str, performance: float, burnout: float, streak: int) -> str:
     """
     Compute companion mood from performance/burnout trends.
     Also considers streak/dormant state.
     """
-    if streak == 0 and days_since_last_entry("") > 7:
+    if streak == 0 and days_since_last_entry(username) > 7:
         return "dormant"
 
     if burnout > 70:
@@ -451,7 +451,7 @@ def compute_companion_summary(username: str, analysis_result: dict | None = None
         trend = "stable"
 
     # Mood (trend-based)
-    mood_trend = compute_trend_mood(perf, burnout, streak)
+    mood_trend = compute_trend_mood(username, perf, burnout, streak)
 
     # Instant mood (today's entry if exists)
     today_str = date.today().isoformat()

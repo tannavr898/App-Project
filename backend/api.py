@@ -931,7 +931,7 @@ def get_companion_summary(
     Fetch live companion state: level, XP, mood, streak, performance influence.
     Computed fresh from analysis + entries + tasks.
     """
-    if username != current_user:
+    if username.strip().lower() != current_user.strip().lower():
         raise HTTPException(status_code=403, detail="Username mismatch")
     if not user_exists(username):
         raise HTTPException(status_code=404, detail="User not found")
