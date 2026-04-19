@@ -8,6 +8,8 @@ const getLocalDate = date => {
   return new Date(date).toLocaleDateString("en-CA")
 }
 
+const getClientToday = () => getLocalDate(new Date())
+
 const CATEGORIES = [
   { id: "study",    label: "Study",    color: "var(--green)",  bg: "var(--green-bg)",  txt: "var(--green-txt)" },
   { id: "training", label: "Training", color: "var(--purple)", bg: "#EEEDFE",          txt: "#534AB7" },
@@ -67,23 +69,39 @@ export default function Tasks({ username }) {
 
   const [newName,      setNewName]      = useState("")
   const [newHours,     setNewHours]     = useState(1)
-  const [newCarryOver, setNewCarryOver] = useState(false)
+  const [newCarryOver, setNewCarryOver] = useState(true)
   const [newCat,       setNewCat]       = useState("study")
   const [adding,       setAdding]       = useState(false)
   const [actionPending, setActionPending] = useState(false)
   const [freeHours,    setFreeHours]    = useState(null)
+  const [taskError,    setTaskError]    = useState("")
+
+  const extractError = async response => {
+    try {
+      const data = await response.json()
+      if (typeof data?.detail === "string") return data.detail
+      return `Request failed (${response.status})`
+    } catch {
+      return `Request failed (${response.status})`
+    }
+  }
 
   const load = async () => {
     try {
-      const r = await apiFetch(`/tasks/${username}?recommended_hours=${recHours}`, {
+      setTaskError("")
+      const today = getClientToday()
+      const r = await apiFetch(`/tasks/${username}?recommended_hours=${recHours}&today=${today}`, {
         cacheKey: `tasks:${username}:${recHours}`,
         cacheTtlMs: 90000,
       })
+      if (!r.ok) {
+        throw new Error(await extractError(r))
+      }
       const d = await r.json()
       setTasks(d.tasks || [])
       setProgress(d.progress || null)
-    } catch {
-      // no-op: component shows last known state
+    } catch (err) {
+      setTaskError(err?.message || "Could not load tasks")
     } finally {
       setLoading(false)
     }
@@ -112,14 +130,16 @@ export default function Tasks({ username }) {
         }
       })
       .catch(() => {})
-    apiFetch(`/tasks/${username}/history`, {
+    const today = getClientToday()
+
+    apiFetch(`/tasks/${username}/history?today=${today}`, {
       cacheKey: `task-history:${username}`,
       cacheTtlMs: 90000,
     })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.history) setHistory(d.history) })
       .catch(() => {})
-    apiFetch(`/tasks/${username}/prefill`, {
+    apiFetch(`/tasks/${username}/prefill?today=${today}`, {
       cacheKey: `task-prefill:${username}`,
       cacheTtlMs: 90000,
     })
@@ -158,19 +178,32 @@ export default function Tasks({ username }) {
   }, [username])
 
   const addTask = async () => {
-    if (!newName.trim() || newHours <= 0 || adding || actionPending) return
+    if (!newName.trim() || !Number.isFinite(newHours) || newHours <= 0 || adding || actionPending) return
     setAdding(true)
     try {
-      await apiFetch(`/tasks`, {
+      setTaskError("")
+      const response = await apiFetch(`/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, name: newName.trim(), hours: newHours, carry_over: newCarryOver, category: newCat }),
+        body: JSON.stringify({
+          username,
+          name: newName.trim(),
+          hours: newHours,
+          carry_over: newCarryOver,
+          category: newCat,
+          today: getClientToday(),
+        }),
       })
+      if (!response.ok) {
+        throw new Error(await extractError(response))
+      }
       clearApiCache(key => key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       setNewName("")
       setNewHours(1)
-      setNewCarryOver(false)
+      setNewCarryOver(true)
       await load()
+    } catch (err) {
+      setTaskError(err?.message || "Could not add task")
     } finally {
       setAdding(false)
     }
@@ -180,12 +213,18 @@ export default function Tasks({ username }) {
     if (actionPending) return
     setActionPending(true)
     try {
-      await apiFetch(`/tasks/${task.completed ? "uncomplete" : "complete"}`, {
+      setTaskError("")
+      const response = await apiFetch(`/tasks/${task.completed ? "uncomplete" : "complete"}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, task_id: task.id }),
+        body: JSON.stringify({ username, task_id: task.id, today: getClientToday() }),
       })
+      if (!response.ok) {
+        throw new Error(await extractError(response))
+      }
       clearApiCache(key => key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       await load()
+    } catch (err) {
+      setTaskError(err?.message || "Could not update task")
     } finally {
       setActionPending(false)
     }
@@ -195,9 +234,15 @@ export default function Tasks({ username }) {
     if (actionPending) return
     setActionPending(true)
     try {
-      await apiFetch(`/tasks/${username}/${id}`, { method: "DELETE" })
+      setTaskError("")
+      const response = await apiFetch(`/tasks/${username}/${id}?today=${getClientToday()}`, { method: "DELETE" })
+      if (!response.ok) {
+        throw new Error(await extractError(response))
+      }
       clearApiCache(key => key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       await load()
+    } catch (err) {
+      setTaskError(err?.message || "Could not delete task")
     } finally {
       setActionPending(false)
     }
@@ -207,12 +252,18 @@ export default function Tasks({ username }) {
     if (actionPending) return
     setActionPending(true)
     try {
-      await apiFetch(`/tasks/toggle-carry-over`, {
+      setTaskError("")
+      const response = await apiFetch(`/tasks/toggle-carry-over`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, task_id: task.id }),
+        body: JSON.stringify({ username, task_id: task.id, today: getClientToday() }),
       })
+      if (!response.ok) {
+        throw new Error(await extractError(response))
+      }
       clearApiCache(key => key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       await load()
+    } catch (err) {
+      setTaskError(err?.message || "Could not update carry-over")
     } finally {
       setActionPending(false)
     }
@@ -319,6 +370,11 @@ export default function Tasks({ username }) {
 
           {/* Task list */}
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "1.25rem" }}>
+            {taskError && (
+              <div style={{ marginBottom: 10, fontSize: 12, color: "var(--red-txt)", background: "var(--red-bg)", border: "1px solid var(--red)", borderRadius: "var(--radius-sm)", padding: "8px 10px" }}>
+                {taskError}
+              </div>
+            )}
             {filtered.length === 0 && (
               <p style={{ fontSize: 12, color: "var(--faint)", padding: "8px 0" }}>No tasks here yet.</p>
             )}

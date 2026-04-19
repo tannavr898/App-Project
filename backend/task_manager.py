@@ -1,5 +1,6 @@
 import uuid
 from datetime import date
+from typing import Optional
 
 try:
     from .data_store import (
@@ -30,16 +31,21 @@ except ImportError:
 
 
 class TaskManager:
-    def __init__(self, username: str, users_dir: str = "users"):
+    def __init__(self, username: str, users_dir: str = "users", today_override: Optional[str] = None):
         self.username = username
+        self.today_override = today_override
         ensure_database()
         self._apply_carry_over()
 
     def _today(self) -> str:
+        if isinstance(self.today_override, str):
+            candidate = self.today_override.strip()
+            if len(candidate) == 10 and candidate.count("-") == 2:
+                return candidate
         return date.today().isoformat()
 
     def _apply_carry_over(self):
-        apply_task_carry_over(self.username)
+        apply_task_carry_over(self.username, self._today())
 
     # --------------------------------------------------
     def add_task(self, name: str, hours: float,
@@ -92,7 +98,7 @@ class TaskManager:
         return task
 
     def get_todays_tasks(self) -> list:
-        return get_todays_tasks(self.username)
+        return get_todays_tasks(self.username, self._today())
 
     def get_progress(self, recommended_hours: float) -> dict:
         todays = self.get_todays_tasks()
@@ -118,7 +124,7 @@ class TaskManager:
         Returns completed hours broken down by category for today.
         Used to pre-fill the log entry form.
         """
-        return get_today_category_hours(self.username)
+        return get_today_category_hours(self.username, self._today())
 
     def get_completion_history(self) -> dict:
         return get_completion_history(self.username)

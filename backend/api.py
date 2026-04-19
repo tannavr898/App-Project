@@ -361,10 +361,12 @@ class NewTask(BaseModel):
     hours: float
     carry_over: bool = False
     category: str = "other"
+    today: Optional[str] = None
 
 class TaskAction(BaseModel):
     username: str
     task_id: str
+    today: Optional[str] = None
 
 class RegisterRequest(BaseModel):
     username: str
@@ -812,9 +814,12 @@ def add_entry(
 def get_tasks(
     username: str,
     recommended_hours: float = 4.0,
+    today: Optional[str] = None,
     current_user: str = Depends(get_current_user),
 ):
-    tm = TaskManager(username, USERS_DIR)
+    if username.strip().lower() != current_user.strip().lower():
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    tm = TaskManager(username, USERS_DIR, today_override=today)
     return {
         "tasks":    tm.get_todays_tasks(),
         "progress": tm.get_progress(recommended_hours),
@@ -826,7 +831,9 @@ def add_task(
     task: NewTask,
     current_user: str = Depends(get_current_user),
 ):
-    tm = TaskManager(task.username, USERS_DIR)
+    if task.username.strip().lower() != current_user.strip().lower():
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    tm = TaskManager(task.username, USERS_DIR, today_override=task.today)
     return tm.add_task(task.name, task.hours, task.carry_over, task.category)
 
 
@@ -835,7 +842,9 @@ def complete_task(
     action: TaskAction,
     current_user: str = Depends(get_current_user),
 ):
-    tm = TaskManager(action.username, USERS_DIR)
+    if action.username.strip().lower() != current_user.strip().lower():
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    tm = TaskManager(action.username, USERS_DIR, today_override=action.today)
     try:
         result = tm.complete_task(action.task_id)
         # Log companion event
@@ -853,7 +862,9 @@ def uncomplete_task(
     action: TaskAction,
     current_user: str = Depends(get_current_user),
 ):
-    tm = TaskManager(action.username, USERS_DIR)
+    if action.username.strip().lower() != current_user.strip().lower():
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    tm = TaskManager(action.username, USERS_DIR, today_override=action.today)
     try:
         return tm.uncomplete_task(action.task_id)
     except ValueError as e:
@@ -864,9 +875,12 @@ def uncomplete_task(
 def delete_task(
     username: str,
     task_id: str,
+    today: Optional[str] = None,
     current_user: str = Depends(get_current_user),
 ):
-    tm = TaskManager(username, USERS_DIR)
+    if username.strip().lower() != current_user.strip().lower():
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    tm = TaskManager(username, USERS_DIR, today_override=today)
     try:
         tm.delete_task(task_id)
         return {"message": "Task deleted"}
@@ -879,7 +893,9 @@ def toggle_carry_over(
     action: TaskAction,
     current_user: str = Depends(get_current_user),
 ):
-    tm = TaskManager(action.username, USERS_DIR)
+    if action.username.strip().lower() != current_user.strip().lower():
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    tm = TaskManager(action.username, USERS_DIR, today_override=action.today)
     try:
         return tm.toggle_carry_over(action.task_id)
     except ValueError as e:
@@ -889,18 +905,24 @@ def toggle_carry_over(
 @app.get("/tasks/{username}/history")
 def get_task_history(
     username: str,
+    today: Optional[str] = None,
     current_user: str = Depends(get_current_user),
 ):
-    tm = TaskManager(username, USERS_DIR)
+    if username.strip().lower() != current_user.strip().lower():
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    tm = TaskManager(username, USERS_DIR, today_override=today)
     return {"history": tm.get_completion_history()}
 
 
 @app.get("/tasks/{username}/prefill")
 def get_prefill(
     username: str,
+    today: Optional[str] = None,
     current_user: str = Depends(get_current_user),
 ):
-    tm         = TaskManager(username, USERS_DIR)
+    if username.strip().lower() != current_user.strip().lower():
+        raise HTTPException(status_code=403, detail="Username mismatch")
+    tm         = TaskManager(username, USERS_DIR, today_override=today)
     hours      = tm.get_todays_hours_by_category()
     total_free = None
     if user_exists(username):

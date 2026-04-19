@@ -530,9 +530,9 @@ def toggle_task_carry_over(username: str, task_id: str) -> dict | None:
     return get_task(username, task_id)
 
 
-def apply_task_carry_over(username: str) -> None:
+def apply_task_carry_over(username: str, today: str | None = None) -> None:
     ensure_database()
-    today = datetime.utcnow().date().isoformat()
+    day = (today or datetime.utcnow().date().isoformat())[:10]
     with get_connection() as conn:
         conn.execute(
             """
@@ -543,13 +543,13 @@ def apply_task_carry_over(username: str) -> None:
               AND carry_over = 1
               AND date_created < ?
             """,
-            (today, username.strip().lower(), today),
+            (day, username.strip().lower(), day),
         )
 
 
-def get_todays_tasks(username: str) -> list[dict]:
+def get_todays_tasks(username: str, today: str | None = None) -> list[dict]:
     ensure_database()
-    today = datetime.utcnow().date().isoformat()
+    day = (today or datetime.utcnow().date().isoformat())[:10]
     with get_connection() as conn:
         rows = conn.execute(
             """
@@ -558,7 +558,7 @@ def get_todays_tasks(username: str) -> list[dict]:
             WHERE username = ? AND date_created = ?
             ORDER BY task_id ASC
             """,
-            (username.strip().lower(), today),
+            (username.strip().lower(), day),
         ).fetchall()
     tasks = [dict(row) for row in rows]
     for task in tasks:
@@ -594,9 +594,9 @@ def get_completion_history(username: str) -> dict:
     }
 
 
-def get_today_category_hours(username: str) -> dict:
+def get_today_category_hours(username: str, today: str | None = None) -> dict:
     ensure_database()
-    today = datetime.utcnow().date().isoformat()
+    day = (today or datetime.utcnow().date().isoformat())[:10]
     with get_connection() as conn:
         rows = conn.execute(
             """
@@ -604,7 +604,7 @@ def get_today_category_hours(username: str) -> dict:
             FROM tasks
             WHERE username = ? AND date_created = ? AND completed = 1
             """,
-            (username.strip().lower(), today),
+            (username.strip().lower(), day),
         ).fetchall()
     result = {"study": 0.0, "training": 0.0, "personal": 0.0, "other": 0.0}
     for category, hours in rows:
