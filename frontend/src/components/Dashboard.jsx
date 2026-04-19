@@ -318,6 +318,7 @@ export default function Dashboard({ username, onNavigate }) {
     let cancelled = false
 
     const loadData = async () => {
+      let analysisStillProcessing = false
       if (!cachedAnalysis) {
         setLoading(true)
       }
@@ -325,7 +326,7 @@ export default function Dashboard({ username, onNavigate }) {
       setIsFirstRun(false)
       try {
         const fetchAnalysis = async () => {
-          for (let attempt = 0; attempt < 12; attempt += 1) {
+          for (let attempt = 0; attempt < 24; attempt += 1) {
             const r = await apiFetch(`/users/${username}/analysis`, {
               timeoutMs: 45000,
               cacheKey: `analysis:${username}`,
@@ -344,7 +345,7 @@ export default function Dashboard({ username, onNavigate }) {
             }
             return await r.json()
           }
-          throw new Error('Analysis is still processing. Try again in a moment.')
+          throw new Error('Analysis is still processing')
         }
 
         const entriesPromise = apiFetch(`/users/${username}/entries`, {
@@ -373,6 +374,19 @@ export default function Dashboard({ username, onNavigate }) {
         const message = e?.name === 'AbortError'
           ? 'Request timed out while loading dashboard data. Please retry in a moment.'
           : (e?.message || 'Failed to load dashboard data')
+
+        if (message.includes('Analysis is still processing')) {
+          analysisStillProcessing = true
+          setError(null)
+          setLoading(true)
+          setTimeout(() => {
+            if (!cancelled) {
+              loadData()
+            }
+          }, 1500)
+          return
+        }
+
         if (cachedAnalysis) {
           console.warn("Dashboard refresh failed; keeping cached data.", message)
           return
@@ -385,7 +399,9 @@ export default function Dashboard({ username, onNavigate }) {
         setError(message)
       } finally {
         if (cancelled) return
-        setLoading(false)
+        if (!analysisStillProcessing) {
+          setLoading(false)
+        }
       }
     }
 

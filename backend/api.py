@@ -15,7 +15,7 @@ import importlib
 import numpy as np
 from datetime import datetime
 from collections import defaultdict, deque
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from time import perf_counter
 from pywebpush import webpush, WebPushException
 
@@ -526,7 +526,25 @@ def build_analysis(username: str) -> dict:
     if active_future and not active_future.done():
         if cached_result is not None:
             return cached_result
-        raise HTTPException(status_code=202, detail="Analysis is being refreshed. Please retry in a moment.")
+
+        # Wait briefly so callers can receive ready data in a single request cycle.
+        wait_seconds = float(os.environ.get("ANALYSIS_WAIT_TIMEOUT_SEC", "8"))
+        try:
+            active_future.result(timeout=wait_seconds)
+        except FutureTimeoutError:
+            raise HTTPException(status_code=202, detail="Analysis is being refreshed. Please retry in a moment.")
+        except Exception as exc:
+            logger.exception("analysis_future_failed username=%s error=%s", username, exc)
+
+        fresh_version, fresh_result = _cached_analysis(username)
+        current_version = _csv_version(username)
+        if fresh_result is not None and fresh_version == current_version:
+            return fresh_result
+
+        # Fallback: compute synchronously if background run finished without a cacheable result.
+        built_version, result = _build_analysis_result(username)
+        _store_analysis_result(username, built_version, result)
+        return result
 
     started = perf_counter()
     built_version, result = _build_analysis_result(username)
