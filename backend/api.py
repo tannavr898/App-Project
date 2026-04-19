@@ -810,6 +810,18 @@ def add_entry(
 # --------------------------------------------------
 # Task routes
 # --------------------------------------------------
+def _resolve_task_username(requested_username: str, current_user: str) -> str:
+    requested = (requested_username or "").strip().lower()
+    effective = (current_user or "").strip().lower()
+    if requested and requested != effective:
+        logger.warning(
+            "task_username_mismatch requested=%s token_user=%s; using token user",
+            requested,
+            effective,
+        )
+    return effective
+
+
 @app.get("/tasks/{username}")
 def get_tasks(
     username: str,
@@ -817,9 +829,8 @@ def get_tasks(
     today: Optional[str] = None,
     current_user: str = Depends(get_current_user),
 ):
-    if username.strip().lower() != current_user.strip().lower():
-        raise HTTPException(status_code=403, detail="Username mismatch")
-    tm = TaskManager(username, USERS_DIR, today_override=today)
+    effective_username = _resolve_task_username(username, current_user)
+    tm = TaskManager(effective_username, USERS_DIR, today_override=today)
     return {
         "tasks":    tm.get_todays_tasks(),
         "progress": tm.get_progress(recommended_hours),
@@ -831,9 +842,8 @@ def add_task(
     task: NewTask,
     current_user: str = Depends(get_current_user),
 ):
-    if task.username.strip().lower() != current_user.strip().lower():
-        raise HTTPException(status_code=403, detail="Username mismatch")
-    tm = TaskManager(task.username, USERS_DIR, today_override=task.today)
+    effective_username = _resolve_task_username(task.username, current_user)
+    tm = TaskManager(effective_username, USERS_DIR, today_override=task.today)
     return tm.add_task(task.name, task.hours, task.carry_over, task.category)
 
 
@@ -842,14 +852,13 @@ def complete_task(
     action: TaskAction,
     current_user: str = Depends(get_current_user),
 ):
-    if action.username.strip().lower() != current_user.strip().lower():
-        raise HTTPException(status_code=403, detail="Username mismatch")
-    tm = TaskManager(action.username, USERS_DIR, today_override=action.today)
+    effective_username = _resolve_task_username(action.username, current_user)
+    tm = TaskManager(effective_username, USERS_DIR, today_override=action.today)
     try:
         result = tm.complete_task(action.task_id)
         # Log companion event
         try:
-            log_companion_event(action.username, "task_completed", 5)
+            log_companion_event(effective_username, "task_completed", 5)
         except Exception as e:
             logger.warning("Failed to log companion event: %s", e)
         return result
@@ -862,9 +871,8 @@ def uncomplete_task(
     action: TaskAction,
     current_user: str = Depends(get_current_user),
 ):
-    if action.username.strip().lower() != current_user.strip().lower():
-        raise HTTPException(status_code=403, detail="Username mismatch")
-    tm = TaskManager(action.username, USERS_DIR, today_override=action.today)
+    effective_username = _resolve_task_username(action.username, current_user)
+    tm = TaskManager(effective_username, USERS_DIR, today_override=action.today)
     try:
         return tm.uncomplete_task(action.task_id)
     except ValueError as e:
@@ -878,9 +886,8 @@ def delete_task(
     today: Optional[str] = None,
     current_user: str = Depends(get_current_user),
 ):
-    if username.strip().lower() != current_user.strip().lower():
-        raise HTTPException(status_code=403, detail="Username mismatch")
-    tm = TaskManager(username, USERS_DIR, today_override=today)
+    effective_username = _resolve_task_username(username, current_user)
+    tm = TaskManager(effective_username, USERS_DIR, today_override=today)
     try:
         tm.delete_task(task_id)
         return {"message": "Task deleted"}
@@ -893,9 +900,8 @@ def toggle_carry_over(
     action: TaskAction,
     current_user: str = Depends(get_current_user),
 ):
-    if action.username.strip().lower() != current_user.strip().lower():
-        raise HTTPException(status_code=403, detail="Username mismatch")
-    tm = TaskManager(action.username, USERS_DIR, today_override=action.today)
+    effective_username = _resolve_task_username(action.username, current_user)
+    tm = TaskManager(effective_username, USERS_DIR, today_override=action.today)
     try:
         return tm.toggle_carry_over(action.task_id)
     except ValueError as e:
@@ -908,9 +914,8 @@ def get_task_history(
     today: Optional[str] = None,
     current_user: str = Depends(get_current_user),
 ):
-    if username.strip().lower() != current_user.strip().lower():
-        raise HTTPException(status_code=403, detail="Username mismatch")
-    tm = TaskManager(username, USERS_DIR, today_override=today)
+    effective_username = _resolve_task_username(username, current_user)
+    tm = TaskManager(effective_username, USERS_DIR, today_override=today)
     return {"history": tm.get_completion_history()}
 
 
@@ -920,14 +925,13 @@ def get_prefill(
     today: Optional[str] = None,
     current_user: str = Depends(get_current_user),
 ):
-    if username.strip().lower() != current_user.strip().lower():
-        raise HTTPException(status_code=403, detail="Username mismatch")
-    tm         = TaskManager(username, USERS_DIR, today_override=today)
+    effective_username = _resolve_task_username(username, current_user)
+    tm         = TaskManager(effective_username, USERS_DIR, today_override=today)
     hours      = tm.get_todays_hours_by_category()
     total_free = None
-    if user_exists(username):
+    if user_exists(effective_username):
         try:
-            df   = get_entries_dataframe(username)
+            df   = get_entries_dataframe(effective_username)
             if not df.empty:
                 last       = df.iloc[-1]
                 logged     = (

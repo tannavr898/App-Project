@@ -91,8 +91,7 @@ export default function Tasks({ username }) {
       setTaskError("")
       const today = getClientToday()
       const r = await apiFetch(`/tasks/${username}?recommended_hours=${recHours}&today=${today}`, {
-        cacheKey: `tasks:${username}:${recHours}`,
-        cacheTtlMs: 90000,
+        timeoutMs: 20000,
       })
       if (!r.ok) {
         throw new Error(await extractError(r))
@@ -110,6 +109,7 @@ export default function Tasks({ username }) {
   useEffect(() => {
     // Fetch selected plan mode from localStorage
     const selectedMode = localStorage.getItem(`pulse-plan-${username}`)
+    clearApiCache(key => key.startsWith(`tasks:${username}:`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`))
     
     apiFetch(`/users/${username}/analysis`, {
       cacheKey: `analysis:${username}`,
