@@ -117,8 +117,9 @@ export async function apiFetch(path, options = {}) {
   const { timeoutMs = REQUEST_TIMEOUT_MS, cacheKey = null, cacheTtlMs = 0, ...fetchOptions } = options
   const token = getToken()
   const method = (fetchOptions.method || "GET").toUpperCase()
+  const isTaskPath = typeof path === "string" && path.startsWith("/tasks/")
 
-  if (method === "GET" && cacheKey && cacheTtlMs > 0) {
+  if (!isTaskPath && method === "GET" && cacheKey && cacheTtlMs > 0) {
     const cachedResponse = readCachedResponse(cacheKey, cacheTtlMs)
     if (cachedResponse) {
       trackApiMetric("api_request", {
@@ -134,6 +135,7 @@ export async function apiFetch(path, options = {}) {
 
   const headers = {
     "Content-Type": "application/json",
+    ...(isTaskPath ? { "Cache-Control": "no-store", Pragma: "no-cache" } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(fetchOptions.headers || {}),
   }
@@ -143,7 +145,12 @@ export async function apiFetch(path, options = {}) {
   const started = performance.now()
 
   try {
-    const res = await fetch(`${BASE}${path}`, { ...fetchOptions, headers, signal: controller.signal })
+    const res = await fetch(`${BASE}${path}`, {
+      ...fetchOptions,
+      ...(isTaskPath ? { cache: "no-store" } : {}),
+      headers,
+      signal: controller.signal,
+    })
     const durationMs = Math.round(performance.now() - started)
 
     trackApiMetric("api_request", {
@@ -158,7 +165,7 @@ export async function apiFetch(path, options = {}) {
       window.location.reload()
     }
 
-    if (method === "GET" && cacheKey && cacheTtlMs > 0 && res.ok) {
+    if (!isTaskPath && method === "GET" && cacheKey && cacheTtlMs > 0 && res.ok) {
       const bodyText = await res.clone().text()
       writeCachedResponse(cacheKey, res, bodyText)
     }

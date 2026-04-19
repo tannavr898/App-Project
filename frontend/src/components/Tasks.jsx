@@ -21,6 +21,23 @@ function getCat(id) {
   return CATEGORIES.find(c => c.id === id) || CATEGORIES[3]
 }
 
+function computeProgressFromTasks(taskList, recommendedHours) {
+  const safeTasks = Array.isArray(taskList) ? taskList : []
+  const recommended = Number.isFinite(recommendedHours) && recommendedHours > 0 ? recommendedHours : 0
+  const completedHours = safeTasks.reduce((sum, t) => sum + (t.completed ? Number(t.hours || 0) : 0), 0)
+  const totalHours = safeTasks.reduce((sum, t) => sum + Number(t.hours || 0), 0)
+  const progressPct = recommended <= 0 ? 100 : Math.min(100, (completedHours / recommended) * 100)
+
+  return {
+    completed_hours: Number(completedHours.toFixed(2)),
+    total_hours: Number(totalHours.toFixed(2)),
+    recommended: Number(recommended.toFixed(2)),
+    progress_pct: Number(progressPct.toFixed(1)),
+    remaining_hours: Number(Math.max(0, recommended - completedHours).toFixed(2)),
+    on_track: completedHours >= recommended,
+  }
+}
+
 function CircleProgress({ pct, size = 80, stroke = 7 }) {
   const r = (size - stroke) / 2
   const circ = 2 * Math.PI * r
@@ -100,8 +117,9 @@ export default function Tasks({ username }) {
       }
       const d = await r.json()
       if (requestId !== loadSequenceRef.current) return
-      setTasks(d.tasks || [])
-      setProgress(d.progress || null)
+      const nextTasks = d.tasks || []
+      setTasks(nextTasks)
+      setProgress(computeProgressFromTasks(nextTasks, recHours))
     } catch (err) {
       if (requestId !== loadSequenceRef.current) return
       setTaskError(err?.message || "Could not load tasks")
@@ -138,26 +156,28 @@ export default function Tasks({ username }) {
     const today = getClientToday()
 
     apiFetch(`/tasks/${username}/history?today=${today}`, {
-      cacheKey: `task-history:${username}`,
-      cacheTtlMs: 90000,
+      timeoutMs: 20000,
     })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.history) setHistory(d.history) })
       .catch(() => {})
     apiFetch(`/tasks/${username}/prefill?today=${today}`, {
-      cacheKey: `task-prefill:${username}`,
-      cacheTtlMs: 90000,
+      timeoutMs: 20000,
     })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.free_hours_yesterday != null) setFreeHours(d.free_hours_yesterday) })
       .catch(() => {})
   }, [username])
 
-  // Re-fetch tasks when recHours changes OR when selected plan changes
+  // Load tasks when entering this page or changing users.
   useEffect(() => {
-    const selectedMode = localStorage.getItem(`pulse-plan-${username}`)
     load()
-  }, [username, recHours])
+  }, [username])
+
+  // Plan changes should only affect progress math, not task membership/state.
+  useEffect(() => {
+    setProgress(computeProgressFromTasks(tasks, recHours))
+  }, [tasks, recHours])
 
   // Listen for plan changes made on the Dashboard
   useEffect(() => {

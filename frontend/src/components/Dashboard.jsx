@@ -226,6 +226,23 @@ function ModeCard({ plan, isActive, isRecommended, accent, onClick }) {
   )
 }
 
+function computeProgressFromTasks(taskList, recommendedHours) {
+  const safeTasks = Array.isArray(taskList) ? taskList : []
+  const recommended = Number.isFinite(recommendedHours) && recommendedHours > 0 ? recommendedHours : 0
+  const completedHours = safeTasks.reduce((sum, t) => sum + (t.completed ? Number(t.hours || 0) : 0), 0)
+  const totalHours = safeTasks.reduce((sum, t) => sum + Number(t.hours || 0), 0)
+  const progressPct = recommended <= 0 ? 100 : Math.min(100, (completedHours / recommended) * 100)
+
+  return {
+    completed_hours: Number(completedHours.toFixed(2)),
+    total_hours: Number(totalHours.toFixed(2)),
+    recommended: Number(recommended.toFixed(2)),
+    progress_pct: Number(progressPct.toFixed(1)),
+    remaining_hours: Number(Math.max(0, recommended - completedHours).toFixed(2)),
+    on_track: completedHours >= recommended,
+  }
+}
+
 export default function Dashboard({ username, onNavigate }) {
   const cachedAnalysis = getCachedJson(`analysis:${username}`, 60000)
   const [data,         setData]         = useState(cachedAnalysis)
@@ -250,8 +267,9 @@ export default function Dashboard({ username, onNavigate }) {
     }
     const t = await tasksRes.json()
     if (requestId !== taskLoadSeqRef.current) return
-    setTasks(t.tasks || [])
-    setProgress(t.progress || null)
+    const nextTasks = t.tasks || []
+    setTasks(nextTasks)
+    setProgress(computeProgressFromTasks(nextTasks, Number(recommendedHours || 0)))
   }
 
   useEffect(() => {
@@ -378,14 +396,14 @@ export default function Dashboard({ username, onNavigate }) {
     }
   }, [username])
 
-  // Refetch tasks when user picks a different plan mode
+  // Plan mode changes should update progress numbers only, not refetch tasks.
   useEffect(() => {
     if (!data) return
     const mode = selectedMode || data.recommended_mode || "comfortable"
     const plan = data.plans?.[mode] || data.optimal_plan
     const recHours = plan?.study ?? 3.5
-    loadTasks(recHours).catch(() => {})
-  }, [selectedMode, data, username])
+    setProgress(computeProgressFromTasks(tasks, recHours))
+  }, [selectedMode, data, tasks])
 
   // Save selected mode to localStorage when it changes
   const handleModeSelect = (mode) => {
