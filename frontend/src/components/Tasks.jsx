@@ -58,13 +58,12 @@ function WeeklyBar({ date, rate }) {
 export default function Tasks({ username }) {
   const cachedAnalysis = getCachedJson(`analysis:${username}`, 90000)
   const initialRecHours = cachedAnalysis?.optimal_plan?.study ?? 3.5
-  const cachedTasks = getCachedJson(`tasks:${username}:${initialRecHours}`, 90000)
 
-  const [tasks,    setTasks]    = useState(cachedTasks?.tasks || [])
-  const [progress, setProgress] = useState(cachedTasks?.progress || null)
+  const [tasks,    setTasks]    = useState([])
+  const [progress, setProgress] = useState(null)
   const [recHours, setRecHours] = useState(initialRecHours)
   const [history,  setHistory]  = useState({})
-  const [loading,  setLoading]  = useState(!(cachedTasks?.tasks || []).length)
+  const [loading,  setLoading]  = useState(true)
   const [filter,   setFilter]   = useState("all")
 
   const [newName,      setNewName]      = useState("")
@@ -205,7 +204,7 @@ export default function Tasks({ username }) {
       if (!response.ok) {
         throw new Error(await extractError(response))
       }
-      clearApiCache(key => key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
+      clearApiCache(key => key.startsWith(`tasks:${username}`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`) || key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       setNewName("")
       setNewHours(1)
       setNewCarryOver(true)
@@ -232,7 +231,7 @@ export default function Tasks({ username }) {
       if (!response.ok) {
         throw new Error(await extractError(response))
       }
-      clearApiCache(key => key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
+      clearApiCache(key => key.startsWith(`tasks:${username}`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`) || key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       await load()
     } catch (err) {
       setTaskError(err?.message || "Could not update task")
@@ -253,7 +252,7 @@ export default function Tasks({ username }) {
       if (!response.ok) {
         throw new Error(await extractError(response))
       }
-      clearApiCache(key => key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
+      clearApiCache(key => key.startsWith(`tasks:${username}`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`) || key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       await load()
     } catch (err) {
       setTaskError(err?.message || "Could not delete task")
@@ -277,7 +276,7 @@ export default function Tasks({ username }) {
       if (!response.ok) {
         throw new Error(await extractError(response))
       }
-      clearApiCache(key => key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
+      clearApiCache(key => key.startsWith(`tasks:${username}`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`) || key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       await load()
     } catch (err) {
       setTaskError(err?.message || "Could not update carry-over")

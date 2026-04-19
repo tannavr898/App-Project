@@ -238,18 +238,28 @@ export default function Dashboard({ username, onNavigate }) {
   const [pushStatus,   setPushStatus]   = useState("default")
   const [pushLoading,  setPushLoading]  = useState(false)
   const [entries,      setEntries]      = useState([])
+  const taskLoadSeqRef = useRef(0)
+
+  const loadTasks = async (recommendedHours) => {
+    const requestId = ++taskLoadSeqRef.current
+    const tasksRes = await apiFetch(`/tasks/${username}?recommended_hours=${recommendedHours}`, {
+      timeoutMs: 20000,
+    })
+    if (!tasksRes.ok) {
+      throw new Error(await tasksRes.text())
+    }
+    const t = await tasksRes.json()
+    if (requestId !== taskLoadSeqRef.current) return
+    setTasks(t.tasks || [])
+    setProgress(t.progress || null)
+  }
 
   useEffect(() => {
     if (!cachedAnalysis) return
     const mode = selectedMode || cachedAnalysis.recommended_mode || "comfortable"
     const plan = cachedAnalysis.plans?.[mode] || cachedAnalysis.optimal_plan
     const recHours = plan?.study ?? 3.5
-    const cachedTasks = getCachedJson(`tasks:${username}:${recHours}`, 45000)
     const cachedEntries = getCachedJson(`entries:${username}`, 45000)
-    if (cachedTasks) {
-      setTasks(cachedTasks.tasks || [])
-      setProgress(cachedTasks.progress || null)
-    }
     if (cachedEntries) {
       setEntries(cachedEntries.entries || [])
     }
@@ -331,15 +341,8 @@ export default function Dashboard({ username, onNavigate }) {
         // Fetch tasks based on plan
         const recMode = d.recommended_mode || 'comfortable'
         const recPlan = d.plans?.[recMode] || d.optimal_plan
-        const tasksRes = await apiFetch(`/tasks/${username}?recommended_hours=${recPlan?.study ?? 3.5}`, {
-          timeoutMs: 20000,
-          cacheKey: `tasks:${username}:${recPlan?.study ?? 3.5}`,
-          cacheTtlMs: 90000,
-        })
-        const t = await tasksRes.json()
+        await loadTasks(recPlan?.study ?? 3.5)
         if (cancelled) return
-        setTasks(t.tasks || [])
-        setProgress(t.progress || null)
 
         // Entries can load independently
         const entriesRes = await entriesPromise
@@ -381,13 +384,7 @@ export default function Dashboard({ username, onNavigate }) {
     const mode = selectedMode || data.recommended_mode || "comfortable"
     const plan = data.plans?.[mode] || data.optimal_plan
     const recHours = plan?.study ?? 3.5
-    apiFetch(`/tasks/${username}?recommended_hours=${recHours}`, {
-      cacheKey: `tasks:${username}:${recHours}`,
-      cacheTtlMs: 90000,
-    })
-      .then(r => r.json())
-      .then(t => { setTasks(t.tasks||[]); setProgress(t.progress||null) })
-      .catch(() => {})
+    loadTasks(recHours).catch(() => {})
   }, [selectedMode, data, username])
 
   // Save selected mode to localStorage when it changes
