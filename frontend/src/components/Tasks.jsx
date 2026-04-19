@@ -1,5 +1,5 @@
 import { apiFetch, clearApiCache, getCachedJson } from "../api"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 
 const getLocalDate = date => {
   // If it's already a date string (YYYY-MM-DD), return as-is to avoid timezone issues
@@ -75,6 +75,8 @@ export default function Tasks({ username }) {
   const [actionPending, setActionPending] = useState(false)
   const [freeHours,    setFreeHours]    = useState(null)
   const [taskError,    setTaskError]    = useState("")
+  const actionLockRef = useRef(false)
+  const loadSequenceRef = useRef(0)
 
   const extractError = async response => {
     try {
@@ -87,6 +89,7 @@ export default function Tasks({ username }) {
   }
 
   const load = async () => {
+    const requestId = ++loadSequenceRef.current
     try {
       setTaskError("")
       const today = getClientToday()
@@ -97,11 +100,14 @@ export default function Tasks({ username }) {
         throw new Error(await extractError(r))
       }
       const d = await r.json()
+      if (requestId !== loadSequenceRef.current) return
       setTasks(d.tasks || [])
       setProgress(d.progress || null)
     } catch (err) {
+      if (requestId !== loadSequenceRef.current) return
       setTaskError(err?.message || "Could not load tasks")
     } finally {
+      if (requestId !== loadSequenceRef.current) return
       setLoading(false)
     }
   }
@@ -178,8 +184,10 @@ export default function Tasks({ username }) {
   }, [username])
 
   const addTask = async () => {
-    if (!newName.trim() || !Number.isFinite(newHours) || newHours <= 0 || adding || actionPending) return
+    if (!newName.trim() || !Number.isFinite(newHours) || newHours <= 0 || adding || actionPending || actionLockRef.current) return
+    actionLockRef.current = true
     setAdding(true)
+    setActionPending(true)
     try {
       setTaskError("")
       const response = await apiFetch(`/tasks`, {
@@ -205,12 +213,15 @@ export default function Tasks({ username }) {
     } catch (err) {
       setTaskError(err?.message || "Could not add task")
     } finally {
+      actionLockRef.current = false
       setAdding(false)
+      setActionPending(false)
     }
   }
 
   const toggleComplete = async task => {
-    if (actionPending) return
+    if (actionPending || actionLockRef.current) return
+    actionLockRef.current = true
     setActionPending(true)
     try {
       setTaskError("")
@@ -227,12 +238,14 @@ export default function Tasks({ username }) {
       setTaskError(err?.message || "Could not update task")
       await load()
     } finally {
+      actionLockRef.current = false
       setActionPending(false)
     }
   }
 
   const deleteTask = async id => {
-    if (actionPending) return
+    if (actionPending || actionLockRef.current) return
+    actionLockRef.current = true
     setActionPending(true)
     try {
       setTaskError("")
@@ -246,12 +259,14 @@ export default function Tasks({ username }) {
       setTaskError(err?.message || "Could not delete task")
       await load()
     } finally {
+      actionLockRef.current = false
       setActionPending(false)
     }
   }
 
   const toggleCarryOver = async task => {
-    if (actionPending) return
+    if (actionPending || actionLockRef.current) return
+    actionLockRef.current = true
     setActionPending(true)
     try {
       setTaskError("")
@@ -268,6 +283,7 @@ export default function Tasks({ username }) {
       setTaskError(err?.message || "Could not update carry-over")
       await load()
     } finally {
+      actionLockRef.current = false
       setActionPending(false)
     }
   }
@@ -385,15 +401,16 @@ export default function Tasks({ username }) {
             {filtered.map(task => {
               const cat = getCat(task.category || "other")
               return (
-                <div key={task.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid var(--border)" }}
+                <div key={task.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid var(--border)", opacity: actionPending ? 0.7 : 1 }}
                   className="task-item">
                   {/* Checkbox */}
-                  <div onClick={() => toggleComplete(task)} style={{
-                    width: 16, height: 16, borderRadius: 4, flexShrink: 0, cursor: "pointer",
+                  <div onClick={() => !actionPending && toggleComplete(task)} style={{
+                    width: 16, height: 16, borderRadius: 4, flexShrink: 0, cursor: actionPending ? "not-allowed" : "pointer",
                     border: task.completed ? "none" : "1px solid var(--border-md)",
                     background: task.completed ? "var(--green)" : "transparent",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     transition: "all 0.15s",
+                    pointerEvents: actionPending ? "none" : "auto",
                   }}>
                     {task.completed && <div style={{ width: 5, height: 3, borderLeft: "1.5px solid white", borderBottom: "1.5px solid white", transform: "rotate(-45deg) translateY(-1px)" }} />}
                   </div>
@@ -415,13 +432,13 @@ export default function Tasks({ username }) {
                   <span style={{ fontSize: 11, color: "var(--faint)", minWidth: 28, textAlign: "right" }}>{task.hours}h</span>
 
                   {/* Carry over */}
-                  <button onClick={() => toggleCarryOver(task)} title={task.carry_over ? "Carry-over on" : "Carry-over off"}
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: task.carry_over ? "var(--blue-txt)" : "var(--faint)", padding: 0, lineHeight: 1 }}>
+                  <button disabled={actionPending} onClick={() => toggleCarryOver(task)} title={task.carry_over ? "Carry-over on" : "Carry-over off"}
+                    style={{ background: "none", border: "none", cursor: actionPending ? "not-allowed" : "pointer", fontSize: 13, color: task.carry_over ? "var(--blue-txt)" : "var(--faint)", padding: 0, lineHeight: 1, opacity: actionPending ? 0.45 : 1 }}>
                     ↺
                   </button>
 
                   {/* Delete */}
-                  <button className="task-delete" onClick={() => deleteTask(task.id)}>×</button>
+                  <button disabled={actionPending} className="task-delete" onClick={() => deleteTask(task.id)}>×</button>
                 </div>
               )
             })}
@@ -452,11 +469,12 @@ export default function Tasks({ username }) {
                   {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
                 <button onClick={() => setNewCarryOver(c => !c)}
-                  style={{ padding: "8px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", fontSize: 11, background: newCarryOver ? "var(--blue-bg)" : "var(--surface)", color: newCarryOver ? "var(--blue-txt)" : "var(--faint)", cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+                  disabled={actionPending}
+                  style={{ padding: "8px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", fontSize: 11, background: newCarryOver ? "var(--blue-bg)" : "var(--surface)", color: newCarryOver ? "var(--blue-txt)" : "var(--faint)", cursor: actionPending ? "not-allowed" : "pointer", fontFamily: "inherit", transition: "all 0.15s", opacity: actionPending ? 0.45 : 1 }}>
                   ↺ carry over
                 </button>
-                <button onClick={addTask} disabled={adding || !newName.trim()}
-                  style={{ padding: "8px 18px", background: "var(--text)", color: "var(--bg)", border: "none", borderRadius: "var(--radius-sm)", fontSize: 13, fontFamily: "inherit", fontWeight: 500, cursor: adding || !newName.trim() ? "not-allowed" : "pointer", opacity: adding || !newName.trim() ? 0.4 : 1 }}>
+                <button onClick={addTask} disabled={adding || actionPending || !newName.trim()}
+                  style={{ padding: "8px 18px", background: "var(--text)", color: "var(--bg)", border: "none", borderRadius: "var(--radius-sm)", fontSize: 13, fontFamily: "inherit", fontWeight: 500, cursor: adding || actionPending || !newName.trim() ? "not-allowed" : "pointer", opacity: adding || actionPending || !newName.trim() ? 0.4 : 1 }}>
                   Add
                 </button>
               </div>
