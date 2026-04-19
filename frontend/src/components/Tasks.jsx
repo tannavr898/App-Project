@@ -224,11 +224,21 @@ export default function Tasks({ username }) {
       if (!response.ok) {
         throw new Error(await extractError(response))
       }
+      const createdTask = await response.json()
       clearApiCache(key => key.startsWith(`tasks:${username}`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`) || key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
       setNewName("")
       setNewHours(1)
       setNewCarryOver(true)
-      await load()
+      setTasks(prev => {
+        const next = Array.isArray(prev) ? [...prev] : []
+        const existingIdx = next.findIndex(t => t.id === createdTask?.id)
+        if (existingIdx >= 0) {
+          next[existingIdx] = createdTask
+        } else if (createdTask?.id) {
+          next.push(createdTask)
+        }
+        return next
+      })
     } catch (err) {
       setTaskError(err?.message || "Could not add task")
     } finally {
@@ -251,11 +261,18 @@ export default function Tasks({ username }) {
       if (!response.ok) {
         throw new Error(await extractError(response))
       }
+      const updatedTask = await response.json()
       clearApiCache(key => key.startsWith(`tasks:${username}`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`) || key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
-      await load()
+      setTasks(prev => {
+        const next = Array.isArray(prev) ? [...prev] : []
+        const idx = next.findIndex(t => t.id === updatedTask?.id)
+        if (idx >= 0) {
+          next[idx] = updatedTask
+        }
+        return next
+      })
     } catch (err) {
       setTaskError(err?.message || "Could not update task")
-      await load()
     } finally {
       actionLockRef.current = false
       setActionPending(false)
@@ -273,10 +290,9 @@ export default function Tasks({ username }) {
         throw new Error(await extractError(response))
       }
       clearApiCache(key => key.startsWith(`tasks:${username}`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`) || key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
-      await load()
+      setTasks(prev => (Array.isArray(prev) ? prev.filter(task => task.id !== id) : []))
     } catch (err) {
       setTaskError(err?.message || "Could not delete task")
-      await load()
     } finally {
       actionLockRef.current = false
       setActionPending(false)
@@ -296,11 +312,18 @@ export default function Tasks({ username }) {
       if (!response.ok) {
         throw new Error(await extractError(response))
       }
+      const updatedTask = await response.json()
       clearApiCache(key => key.startsWith(`tasks:${username}`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`) || key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
-      await load()
+      setTasks(prev => {
+        const next = Array.isArray(prev) ? [...prev] : []
+        const idx = next.findIndex(t => t.id === updatedTask?.id)
+        if (idx >= 0) {
+          next[idx] = updatedTask
+        }
+        return next
+      })
     } catch (err) {
       setTaskError(err?.message || "Could not update carry-over")
-      await load()
     } finally {
       actionLockRef.current = false
       setActionPending(false)
