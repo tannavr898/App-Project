@@ -460,6 +460,70 @@ def get_task(username: str, task_id: str) -> dict | None:
     return result
 
 
+def _task_username_aliases(username: str) -> list[str]:
+    normalized = username.strip().lower()
+    variants = [normalized]
+    space_variant = normalized.replace("_", " ")
+    underscore_variant = normalized.replace(" ", "_")
+    for variant in (space_variant, underscore_variant):
+        if variant not in variants:
+            variants.append(variant)
+    return variants
+
+
+def migrate_task_aliases(username: str) -> int:
+    """Move task rows from legacy username aliases to the normalized username."""
+    ensure_database()
+    canonical = username.strip().lower()
+    aliases = [u for u in _task_username_aliases(canonical) if u != canonical]
+    if not aliases:
+        return 0
+
+    moved = 0
+    with get_connection() as conn:
+        for alias in aliases:
+            rows = conn.execute(
+                """
+                SELECT task_id, name, hours, category, completed, carry_over, date_created, date_completed
+                FROM tasks
+                WHERE username = ?
+                """,
+                (alias,),
+            ).fetchall()
+
+            for row in rows:
+                task_id = row["task_id"]
+                exists = conn.execute(
+                    "SELECT 1 FROM tasks WHERE username = ? AND task_id = ?",
+                    (canonical, task_id),
+                ).fetchone()
+                if exists is None:
+                    conn.execute(
+                        """
+                        INSERT INTO tasks (
+                            username, task_id, name, hours, category,
+                            completed, carry_over, date_created, date_completed
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            canonical,
+                            row["task_id"],
+                            row["name"],
+                            float(row["hours"]),
+                            row["category"],
+                            int(row["completed"]),
+                            int(row["carry_over"]),
+                            row["date_created"],
+                            row["date_completed"],
+                        ),
+                    )
+                    moved += 1
+
+            conn.execute("DELETE FROM tasks WHERE username = ?", (alias,))
+
+    return moved
+
+
 def upsert_task(username: str, task: dict) -> None:
     ensure_database()
     with get_connection() as conn:

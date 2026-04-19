@@ -225,6 +225,7 @@ export default function Tasks({ username }) {
       await load()
     } catch (err) {
       setTaskError(err?.message || "Could not update task")
+      await load()
     } finally {
       setActionPending(false)
     }
@@ -243,6 +244,7 @@ export default function Tasks({ username }) {
       await load()
     } catch (err) {
       setTaskError(err?.message || "Could not delete task")
+      await load()
     } finally {
       setActionPending(false)
     }
@@ -264,6 +266,7 @@ export default function Tasks({ username }) {
       await load()
     } catch (err) {
       setTaskError(err?.message || "Could not update carry-over")
+      await load()
     } finally {
       setActionPending(false)
     }

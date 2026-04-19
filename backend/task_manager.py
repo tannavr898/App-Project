@@ -8,6 +8,7 @@ try:
         delete_task,
         ensure_database,
         get_completion_history,
+        migrate_task_aliases,
         get_today_category_hours,
         get_todays_tasks,
         get_task,
@@ -21,6 +22,7 @@ except ImportError:
         delete_task,
         ensure_database,
         get_completion_history,
+        migrate_task_aliases,
         get_today_category_hours,
         get_todays_tasks,
         get_task,
@@ -35,6 +37,7 @@ class TaskManager:
         self.username = username
         self.today_override = today_override
         ensure_database()
+        migrate_task_aliases(self.username)
         self._apply_carry_over()
 
     def _today(self) -> str:
