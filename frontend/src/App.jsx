@@ -8,16 +8,17 @@ import "./index.css"
 import { clearAuth, getSavedUser } from "./api"
 
 const LIGHT = {
-  "--bg":        "#f7f7f5",
+  "--bg":        "#F8FAF8",
   "--surface":   "#ffffff",
-  "--border":    "#e8e6e0",
-  "--border-md": "#d4d0c8",
-  "--text":      "#1a1a18",
-  "--muted":     "#6b6860",
-  "--faint":     "#9e9b94",
-  "--green":     "#1D9E75",
-  "--green-bg":  "#E1F5EE",
-  "--green-txt": "#0F6E56",
+  "--border":    "#E3EDE7",
+  "--border-md": "#C8DBD1",
+  "--text":      "#111827",
+  "--muted":     "#6B7280",
+  "--faint":     "#8B9A93",
+  "--green":     "#10B981",
+  "--green-bg":  "#DFF8EC",
+  "--green-txt": "#047857",
+  "--hover":     "#059669",
   "--amber":     "#EF9F27",
   "--amber-bg":  "#FAEEDA",
   "--amber-txt": "#854F0B",
@@ -34,16 +35,17 @@ const LIGHT = {
 }
 
 const DARK = {
-  "--bg":        "#141412",
-  "--surface":   "#1e1e1b",
-  "--border":    "#2e2e2a",
-  "--border-md": "#3e3e38",
-  "--text":      "#f0ede6",
-  "--muted":     "#b8b4ac",
-  "--faint":     "#7a7570",
-  "--green":     "#1D9E75",
-  "--green-bg":  "#0d3326",
-  "--green-txt": "#5DCAA5",
+  "--bg":        "#0B1412",
+  "--surface":   "#15211D",
+  "--border":    "#263832",
+  "--border-md": "#375149",
+  "--text":      "#F3F4F6",
+  "--muted":     "#9CA3AF",
+  "--faint":     "#728179",
+  "--green":     "#34D399",
+  "--green-bg":  "#0E3A2C",
+  "--green-txt": "#A7F3D0",
+  "--hover":     "#10B981",
   "--amber":     "#EF9F27",
   "--amber-bg":  "#2e1f06",
   "--amber-txt": "#FAC775",
@@ -122,7 +124,7 @@ export default function App() {
       height: "100vh",
       background: vars["--bg"],
       color: vars["--text"],
-      fontFamily: "'DM Sans', sans-serif",
+      fontFamily: "'Aptos Rounded', 'Segoe UI Variable', 'Nunito Sans', sans-serif",
       overflow: "hidden",
       transition: "background 0.25s, color 0.25s",
     }}>
@@ -135,7 +137,7 @@ export default function App() {
             {page === "dashboard" && <Dashboard username={user} onNavigate={setPage} />}
             {page === "companion" && <Companion username={user} onNavigate={setPage} />}
             {page === "log"       && <LogEntry  username={user} onSaved={() => setPage("dashboard")} />}
-            {page === "tasks"     && <Tasks     username={user} />}
+            {page === "tasks"     && <Tasks     username={user} onNavigate={setPage} />}
           </main>
 
           {/* Fixed Bottom Bar - always visible */}
@@ -237,7 +239,7 @@ export default function App() {
             {page === "dashboard" && <Dashboard username={user} onNavigate={setPage} />}
             {page === "companion" && <Companion username={user} onNavigate={setPage} />}
             {page === "log"       && <LogEntry  username={user} onSaved={() => setPage("dashboard")} />}
-            {page === "tasks"     && <Tasks     username={user} />}
+            {page === "tasks"     && <Tasks     username={user} onNavigate={setPage} />}
           </main>
         </div>
       )}

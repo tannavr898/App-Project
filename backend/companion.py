@@ -269,15 +269,28 @@ def compute_total_xp_from_history(username: str) -> dict:
     total_xp = 0
 
     if len(df) < 1:
-        return {"xp_current": 0, "events": events, "entry_count": 0}
+        task_xp_data = compute_task_xp_from_history(username)
+        return {
+            "xp_current": task_xp_data["xp_current"],
+            "events": task_xp_data["events"],
+            "entry_count": 0,
+            "breakdown": {
+                "entries": 0,
+                "tasks": task_xp_data["xp_current"],
+                "milestones": 0,
+                "variable": 0,
+            },
+        }
 
     # Track dates seen for milestone detection
     entry_dates = sorted(set(df["date"].astype(str).str[:10]))
     today_str = date.today().isoformat()
+    breakdown = {"entries": 0, "tasks": 0, "milestones": 0, "variable": 0}
 
     # First entry bonus (always award on first entry in history)
     if len(entry_dates) > 0:
         total_xp += XP_FIRST_ENTRY
+        breakdown["milestones"] += XP_FIRST_ENTRY
         events.append({
             "event": "first_entry",
             "xp": XP_FIRST_ENTRY,
@@ -293,6 +306,8 @@ def compute_total_xp_from_history(username: str) -> dict:
         # Variable bonus for this date
         variable_bonus = get_variable_xp_bonus(username, entry_date)
         entry_xp += variable_bonus
+        breakdown["entries"] += entry_xp - variable_bonus
+        breakdown["variable"] += variable_bonus
 
         total_xp += entry_xp
         events.append({
@@ -305,25 +320,70 @@ def compute_total_xp_from_history(username: str) -> dict:
         # Milestone bonuses (one-time, for this specific date)
         if streak_at_date == 3:
             total_xp += MILESTONE_XP["day_3"]
+            breakdown["milestones"] += MILESTONE_XP["day_3"]
             events.append({"event": "milestone_day_3", "xp": MILESTONE_XP["day_3"], "date": entry_date})
         elif streak_at_date == 7:
             total_xp += MILESTONE_XP["day_7"]
+            breakdown["milestones"] += MILESTONE_XP["day_7"]
             events.append({"event": "milestone_day_7", "xp": MILESTONE_XP["day_7"], "date": entry_date})
         elif streak_at_date == 14:
             total_xp += MILESTONE_XP["day_14"]
+            breakdown["milestones"] += MILESTONE_XP["day_14"]
             events.append({"event": "milestone_day_14", "xp": MILESTONE_XP["day_14"], "date": entry_date})
         elif streak_at_date == 30:
             total_xp += MILESTONE_XP["day_30"]
+            breakdown["milestones"] += MILESTONE_XP["day_30"]
             events.append({"event": "milestone_day_30", "xp": MILESTONE_XP["day_30"], "date": entry_date})
 
     # Consistency milestone (21 unique dates logged)
     if len(entry_dates) >= 21:
         total_xp += MILESTONE_XP["consistency_21"]
+        breakdown["milestones"] += MILESTONE_XP["consistency_21"]
         events.append({"event": "consistency_21", "xp": MILESTONE_XP["consistency_21"], "date": today_str})
 
-    # TODO: Task XP (integrate with task manager in Phase 2)
+    task_xp_data = compute_task_xp_from_history(username)
+    total_xp += task_xp_data["xp_current"]
+    breakdown["tasks"] = task_xp_data["xp_current"]
+    events.extend(task_xp_data["events"])
 
-    return {"xp_current": total_xp, "events": events, "entry_count": len(entry_dates)}
+    return {
+        "xp_current": total_xp,
+        "events": events,
+        "entry_count": len(entry_dates),
+        "breakdown": breakdown,
+    }
+
+
+def compute_task_xp_from_history(username: str) -> dict:
+    """Compute deterministic task XP from completion history."""
+    history = get_completion_history(username)
+    events = []
+    total_xp = 0
+
+    for day, stats in sorted(history.items()):
+        completed = int(stats.get("completed", 0) or 0)
+        if completed <= 0:
+            continue
+
+        task_xp = completed * XP_TASK_COMPLETED
+        total_xp += task_xp
+        events.append({
+            "event": "tasks_completed",
+            "xp": task_xp,
+            "date": day,
+            "completed": completed,
+        })
+
+        if completed >= 3:
+            total_xp += XP_FULL_DAY_BONUS
+            events.append({
+                "event": "full_task_day",
+                "xp": XP_FULL_DAY_BONUS,
+                "date": day,
+                "completed": completed,
+            })
+
+    return {"xp_current": total_xp, "events": events}
 
 
 def get_level_from_xp(xp: int) -> int:
@@ -410,12 +470,16 @@ def compute_companion_summary(username: str, analysis_result: dict | None = None
 
     # Insufficient data state
     if df.empty or len(df) < 1:
+        xp_data = compute_total_xp_from_history(username)
+        xp_current = xp_data["xp_current"]
+        level = get_level_from_xp(xp_current)
         return {
-            "level": 1,
-            "xp_current": 0,
-            "xp_threshold": 0,
-            "xp_to_level_up": LEVEL_THRESHOLDS[2],
-            "level_progress_pct": 0,
+            "level": level,
+            "level_name": LEVEL_NAMES.get(level, "Seed"),
+            "xp_current": xp_current,
+            "xp_threshold": LEVEL_THRESHOLDS[level],
+            "xp_to_level_up": get_xp_to_next_level(xp_current, level),
+            "level_progress_pct": round(get_level_progress_percent(xp_current, level), 1),
             "visual_stage": "🌰",
             "mood_trend": "dormant",
             "mood_emoji": "🌱",
@@ -427,7 +491,9 @@ def compute_companion_summary(username: str, analysis_result: dict | None = None
             "comeback_available": False,
             "milestones_reached": [],
             "entry_count": 0,
-            "events": [],
+            "events": xp_data.get("events", []),
+            "xp_breakdown": xp_data.get("breakdown", {}),
+            "recent_xp_events": xp_data.get("events", [])[-6:],
         }
 
     # Core metrics
@@ -526,6 +592,8 @@ def compute_companion_summary(username: str, analysis_result: dict | None = None
         "comeback_bonus_xp": comeback["bonus_xp"] if comeback else 0,
         "milestones_reached": milestones,
         "entry_count": entry_count,
+        "xp_breakdown": xp_data.get("breakdown", {}),
+        "recent_xp_events": xp_data.get("events", [])[-6:],
     }
 
 

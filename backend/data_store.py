@@ -132,7 +132,12 @@ def ensure_database() -> None:
 
                 CREATE TABLE IF NOT EXISTS push_reminder_state (
                     username TEXT PRIMARY KEY,
-                    last_sent INTEGER NOT NULL
+                    last_sent INTEGER NOT NULL,
+                    reminder_time TEXT NOT NULL DEFAULT "20:30",
+                    log_enabled INTEGER NOT NULL DEFAULT 1,
+                    task_enabled INTEGER NOT NULL DEFAULT 1,
+                    timezone TEXT NOT NULL DEFAULT "local",
+                    updated_at TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS companion_state (
@@ -165,8 +170,24 @@ def ensure_database() -> None:
                 (DEV_USERNAME, DEV_PASSWORD_PLACEHOLDER_HASH, _now_iso()),
             )
         _migrate_legacy_data()
+        _ensure_reminder_columns()
         _initialize_companion_states()
         _db_ready = True
+
+
+def _ensure_reminder_columns() -> None:
+    with get_connection() as conn:
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(push_reminder_state)").fetchall()}
+        additions = {
+            "reminder_time": 'TEXT NOT NULL DEFAULT "20:30"',
+            "log_enabled": "INTEGER NOT NULL DEFAULT 1",
+            "task_enabled": "INTEGER NOT NULL DEFAULT 1",
+            "timezone": 'TEXT NOT NULL DEFAULT "local"',
+            "updated_at": "TEXT",
+        }
+        for name, definition in additions.items():
+            if name not in columns:
+                conn.execute(f"ALTER TABLE push_reminder_state ADD COLUMN {name} {definition}")
 
 
 def _migrate_legacy_data() -> None:
@@ -741,6 +762,76 @@ def set_reminder_state(username: str, last_sent: int) -> None:
             """,
             (username.strip().lower(), int(last_sent)),
         )
+
+
+def get_reminder_preferences(username: str) -> dict:
+    ensure_database()
+    normalized = username.strip().lower()
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT last_sent, reminder_time, log_enabled, task_enabled, timezone
+            FROM push_reminder_state
+            WHERE username = ?
+            """,
+            (normalized,),
+        ).fetchone()
+    if row is None:
+        return {
+            "last_sent": 0,
+            "reminder_time": "20:30",
+            "log_enabled": True,
+            "task_enabled": True,
+            "timezone": "local",
+        }
+    return {
+        "last_sent": int(row["last_sent"] or 0),
+        "reminder_time": row["reminder_time"] or "20:30",
+        "log_enabled": bool(row["log_enabled"]),
+        "task_enabled": bool(row["task_enabled"]),
+        "timezone": row["timezone"] or "local",
+    }
+
+
+def set_reminder_preferences(
+    username: str,
+    reminder_time: str,
+    log_enabled: bool,
+    task_enabled: bool,
+    timezone: str = "local",
+) -> dict:
+    ensure_database()
+    normalized = username.strip().lower()
+    safe_time = reminder_time if isinstance(reminder_time, str) and len(reminder_time) == 5 else "20:30"
+    with get_connection() as conn:
+        existing = conn.execute(
+            "SELECT last_sent FROM push_reminder_state WHERE username = ?",
+            (normalized,),
+        ).fetchone()
+        last_sent = int(existing["last_sent"]) if existing else 0
+        conn.execute(
+            """
+            INSERT INTO push_reminder_state (
+                username, last_sent, reminder_time, log_enabled, task_enabled, timezone, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET
+                reminder_time = excluded.reminder_time,
+                log_enabled = excluded.log_enabled,
+                task_enabled = excluded.task_enabled,
+                timezone = excluded.timezone,
+                updated_at = excluded.updated_at
+            """,
+            (
+                normalized,
+                last_sent,
+                safe_time,
+                1 if log_enabled else 0,
+                1 if task_enabled else 0,
+                timezone or "local",
+                _now_iso(),
+            ),
+        )
+    return get_reminder_preferences(normalized)
 
 
 def _initialize_companion_states() -> None:

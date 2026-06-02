@@ -26,6 +26,21 @@ const trendTone = (trend) => {
   return "neutral"
 }
 
+const xpEventLabel = (eventName) => {
+  const labels = {
+    first_entry: "First log",
+    daily_entry: "Daily log",
+    milestone_day_3: "3-day streak",
+    milestone_day_7: "7-day streak",
+    milestone_day_14: "14-day streak",
+    milestone_day_30: "30-day streak",
+    consistency_21: "21 entries",
+    tasks_completed: "Tasks completed",
+    full_task_day: "Full task day",
+  }
+  return labels[eventName] || String(eventName || "XP event").replace(/_/g, " ")
+}
+
 function StatChip({ label, value }) {
   return (
     <div className="companion-chip">
@@ -119,6 +134,15 @@ export default function Companion({ username, variant = "full", onNavigate }) {
     return () => clearInterval(interval)
   }, [username, pollingEnabled])
 
+  useEffect(() => {
+    const handleTasksUpdated = event => {
+      if (event?.detail?.username && event.detail.username !== username) return
+      fetchCompanion()
+    }
+    window.addEventListener("pulse:tasks-updated", handleTasksUpdated)
+    return () => window.removeEventListener("pulse:tasks-updated", handleTasksUpdated)
+  }, [username, pollingEnabled])
+
   if (loading) {
     return (
       <div className={`companion-container ${isSummary ? "is-summary" : "is-full"} loading`}>
@@ -151,6 +175,8 @@ export default function Companion({ username, variant = "full", onNavigate }) {
     performance_influence,
     comeback_available,
     comeback_bonus_xp,
+    xp_breakdown = {},
+    recent_xp_events = [],
   } = companion
 
   const performanceScore = clamp(toNumber(performance_influence?.current_performance), 0, 100)
@@ -165,6 +191,12 @@ export default function Companion({ username, variant = "full", onNavigate }) {
   const trendText = trendLabel(trend)
   const trendClass = trendTone(trend)
   const sceneClass = sceneClassForLevel(level)
+  const xpBreakdownRows = [
+    { label: "Entries", value: xp_breakdown.entries || 0 },
+    { label: "Tasks", value: xp_breakdown.tasks || 0 },
+    { label: "Milestones", value: xp_breakdown.milestones || 0 },
+    { label: "Bonus", value: xp_breakdown.variable || 0 },
+  ]
 
   const pulseMode = burnoutScore >= 65 && performanceScore <= 45
     ? "low"
@@ -283,6 +315,14 @@ export default function Companion({ username, variant = "full", onNavigate }) {
                 <div className="xp-bar-container xp-bar-container--large">
                   <div className="xp-bar-fill" style={{ width: `${xpProgress}%` }} />
                 </div>
+                <div className="companion-xp-breakdown">
+                  {xpBreakdownRows.map(row => (
+                    <div key={row.label}>
+                      <span>{row.label}</span>
+                      <strong>{row.value} XP</strong>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="companion-panel">
@@ -337,6 +377,25 @@ export default function Companion({ username, variant = "full", onNavigate }) {
                     <p>A smoother pulse means your ecosystem is stabilizing.</p>
                   </div>
                 </div>
+              </div>
+
+              <div className="companion-panel companion-panel--soft">
+                <SectionTitle
+                  label="Recent XP"
+                  help="XP comes from daily logs, completed tasks, streak milestones, and deterministic daily bonuses."
+                />
+                {recent_xp_events.length > 0 ? (
+                  <div className="companion-event-list">
+                    {recent_xp_events.slice().reverse().map((event, index) => (
+                      <div key={`${event.event}-${event.date}-${index}`}>
+                        <span>{xpEventLabel(event.event)}</span>
+                        <strong>+{event.xp} XP</strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="companion-empty-copy">Log an entry or complete tasks to start earning XP.</p>
+                )}
               </div>
             </div>
           </div>

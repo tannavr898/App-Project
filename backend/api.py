@@ -29,12 +29,14 @@ try:
         get_entries_version,
         get_entry_row,
         get_push_subscriptions,
+        get_reminder_preferences,
         get_reminder_state,
         get_user,
         has_entries,
         list_users as store_list_users,
         remove_push_subscription,
         set_reminder_state,
+        set_reminder_preferences,
         upsert_push_subscription,
         upsert_entry,
         log_companion_event,
@@ -52,12 +54,14 @@ except ImportError:
         get_entries_version,
         get_entry_row,
         get_push_subscriptions,
+        get_reminder_preferences,
         get_reminder_state,
         get_user,
         has_entries,
         list_users as store_list_users,
         remove_push_subscription,
         set_reminder_state,
+        set_reminder_preferences,
         upsert_push_subscription,
         upsert_entry,
         log_companion_event,
@@ -384,6 +388,13 @@ class PushUnsubscribe(BaseModel):
     username: str
     endpoint: str
 
+class ReminderPreferences(BaseModel):
+    username: str
+    reminder_time: str = "20:30"
+    log_enabled: bool = True
+    task_enabled: bool = True
+    timezone: str = "local"
+
 # --------------------------------------------------
 # Auth dependency
 # --------------------------------------------------
@@ -462,6 +473,27 @@ def _today_date() -> str:
     return pd.Timestamp.now().normalize().strftime("%Y-%m-%d")
 
 
+def _minutes_from_time(value: str) -> int:
+    try:
+        hour, minute = [int(part) for part in str(value).split(":", 1)]
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            return hour * 60 + minute
+    except Exception:
+        pass
+    return 20 * 60 + 30
+
+
+def _should_send_reminder_now(preferences: dict, now_dt: datetime, last_sent: int) -> bool:
+    target_minutes = _minutes_from_time(preferences.get("reminder_time", "20:30"))
+    current_minutes = now_dt.hour * 60 + now_dt.minute
+    if current_minutes < target_minutes:
+        return False
+    if last_sent <= 0:
+        return True
+    last_dt = datetime.fromtimestamp(last_sent)
+    return last_dt.date() < now_dt.date()
+
+
 def _has_unfinished_tasks(username: str) -> bool:
     try:
         tm = TaskManager(username, USERS_DIR)
@@ -484,14 +516,18 @@ def _needs_log_entry(username: str) -> bool:
 def _dispatch_push_reminders():
     subscriptions = {username: get_push_subscriptions(username) for username in store_list_users()}
     now = int(time.time())
+    now_dt = datetime.now()
     for username, subs in subscriptions.items():
-        last_sent = get_reminder_state(username)
-        if now - last_sent < 60 * 60:
+        if not subs:
             continue
-        if _needs_log_entry(username):
+        preferences = get_reminder_preferences(username)
+        last_sent = int(preferences.get("last_sent") or get_reminder_state(username))
+        if not _should_send_reminder_now(preferences, now_dt, last_sent):
+            continue
+        if preferences.get("log_enabled", True) and _needs_log_entry(username):
             _notify_user(username, "Log your Pulse entry", "You haven't logged today's wellness entry yet.", "/log")
             set_reminder_state(username, now)
-        elif _has_unfinished_tasks(username):
+        elif preferences.get("task_enabled", True) and _has_unfinished_tasks(username):
             _notify_user(username, "Finish your tasks", "You have unfinished tasks waiting in Pulse.", "/tasks")
             set_reminder_state(username, now)
 
@@ -503,7 +539,7 @@ def _start_push_reminder_thread():
                 _dispatch_push_reminders()
             except Exception:
                 pass
-            time.sleep(60 * 60)
+            time.sleep(15 * 60)
     thread = threading.Thread(target=worker, daemon=True)
     thread.start()
 
@@ -684,6 +720,34 @@ def unsubscribe_push(
         raise HTTPException(status_code=403, detail="Username mismatch")
     _remove_subscription(payload.username, payload.endpoint)
     return {"message": "Subscription removed"}
+
+
+@app.get("/reminders/{username}/preferences")
+def get_push_reminder_preferences(
+    username: str,
+    current_user: str = Depends(get_current_user),
+):
+    effective_username = _resolve_task_username(username, current_user)
+    return get_reminder_preferences(effective_username)
+
+
+@app.post("/reminders/preferences")
+def save_push_reminder_preferences(
+    payload: ReminderPreferences,
+    current_user: str = Depends(get_current_user),
+):
+    effective_username = _resolve_task_username(payload.username, current_user)
+    try:
+        datetime.strptime(payload.reminder_time, "%H:%M")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Reminder time must use HH:MM format")
+    return set_reminder_preferences(
+        effective_username,
+        payload.reminder_time,
+        payload.log_enabled,
+        payload.task_enabled,
+        payload.timezone,
+    )
 
 
 @app.post("/push/send-test")

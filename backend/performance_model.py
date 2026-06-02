@@ -183,17 +183,28 @@ class PerformanceModel:
         if 'avg_productivity_7' not in df.columns:
             # make sure the score column exists
             df = self._add_performance_score(df)
-        # select rows where the moving productivity is high
+        # Select rows where the moving productivity is high. Blend long-term
+        # history with a recent weighted window so baselines can adapt week to week.
         threshold = df['avg_productivity_7'].quantile(0.75)
         good = df[df['avg_productivity_7'] >= threshold]
         if len(good) == 0:
             # fall back to generic defaults
             return {"optimal_sleep": 8.25, "optimal_load": 4}
+
+        recent = good.tail(min(14, len(good))).copy()
+        weights = np.linspace(0.65, 1.35, len(recent)) if len(recent) else np.array([1.0])
+
+        def blended_mean(column, fallback):
+            long_term = float(good[column].mean())
+            recent_weighted = float(np.average(recent[column], weights=weights)) if len(recent) else long_term
+            value = (long_term * 0.45) + (recent_weighted * 0.55)
+            return fallback if not np.isfinite(value) else value
+
         return {
-            "optimal_sleep": good['avg_sleep_7'].mean(),
-            "optimal_load": good['avg_load'].mean(),
-            "baseline_fatigue": good['avg_fatigue_7'].mean(),
-            "baseline_stress": good['avg_stress_7'].mean(),
+            "optimal_sleep": blended_mean('avg_sleep_7', 8.25),
+            "optimal_load": blended_mean('avg_load', 4),
+            "baseline_fatigue": blended_mean('avg_fatigue_7', 5),
+            "baseline_stress": blended_mean('avg_stress_7', 5),
         }
 
 

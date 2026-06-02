@@ -72,7 +72,7 @@ function WeeklyBar({ date, rate }) {
   )
 }
 
-export default function Tasks({ username }) {
+export default function Tasks({ username, onNavigate }) {
   const cachedAnalysis = getCachedJson(`analysis:${username}`, 90000)
   const initialRecHours = cachedAnalysis?.optimal_plan?.study ?? 3.5
 
@@ -127,6 +127,23 @@ export default function Tasks({ username }) {
       if (requestId !== loadSequenceRef.current) return
       setLoading(false)
     }
+  }
+
+  const notifyTasksChanged = () => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("pulse:tasks-updated", { detail: { username } }))
+    }
+  }
+
+  const clearTaskRelatedCache = () => {
+    clearApiCache(key =>
+      key.startsWith(`tasks:${username}`) ||
+      key.startsWith(`task-history:${username}`) ||
+      key.startsWith(`task-prefill:${username}`) ||
+      key.startsWith(`companion:${username}`) ||
+      key.includes(`/tasks/${username}`) ||
+      key.includes(`/users/${username}/analysis`)
+    )
   }
 
   useEffect(() => {
@@ -225,7 +242,7 @@ export default function Tasks({ username }) {
         throw new Error(await extractError(response))
       }
       const createdTask = await response.json()
-      clearApiCache(key => key.startsWith(`tasks:${username}`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`) || key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
+      clearTaskRelatedCache()
       setNewName("")
       setNewHours(1)
       setNewCarryOver(true)
@@ -239,6 +256,7 @@ export default function Tasks({ username }) {
         }
         return next
       })
+      notifyTasksChanged()
     } catch (err) {
       setTaskError(err?.message || "Could not add task")
     } finally {
@@ -262,7 +280,7 @@ export default function Tasks({ username }) {
         throw new Error(await extractError(response))
       }
       const updatedTask = await response.json()
-      clearApiCache(key => key.startsWith(`tasks:${username}`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`) || key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
+      clearTaskRelatedCache()
       setTasks(prev => {
         const next = Array.isArray(prev) ? [...prev] : []
         const idx = next.findIndex(t => t.id === updatedTask?.id)
@@ -271,6 +289,7 @@ export default function Tasks({ username }) {
         }
         return next
       })
+      notifyTasksChanged()
     } catch (err) {
       setTaskError(err?.message || "Could not update task")
     } finally {
@@ -289,8 +308,9 @@ export default function Tasks({ username }) {
       if (!response.ok) {
         throw new Error(await extractError(response))
       }
-      clearApiCache(key => key.startsWith(`tasks:${username}`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`) || key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
+      clearTaskRelatedCache()
       setTasks(prev => (Array.isArray(prev) ? prev.filter(task => task.id !== id) : []))
+      notifyTasksChanged()
     } catch (err) {
       setTaskError(err?.message || "Could not delete task")
     } finally {
@@ -313,7 +333,7 @@ export default function Tasks({ username }) {
         throw new Error(await extractError(response))
       }
       const updatedTask = await response.json()
-      clearApiCache(key => key.startsWith(`tasks:${username}`) || key.startsWith(`task-history:${username}`) || key.startsWith(`task-prefill:${username}`) || key.includes(`/tasks/${username}`) || key.includes(`/users/${username}/analysis`))
+      clearTaskRelatedCache()
       setTasks(prev => {
         const next = Array.isArray(prev) ? [...prev] : []
         const idx = next.findIndex(t => t.id === updatedTask?.id)
@@ -322,6 +342,7 @@ export default function Tasks({ username }) {
         }
         return next
       })
+      notifyTasksChanged()
     } catch (err) {
       setTaskError(err?.message || "Could not update carry-over")
     } finally {
@@ -376,6 +397,11 @@ export default function Tasks({ username }) {
           <h1 style={{ fontSize: 16, fontWeight: 500, color: "var(--text)" }}>Tasks</h1>
           <p style={{ fontSize: 12, color: "var(--faint)", marginTop: 2 }}>Track your daily study goal</p>
         </div>
+        {onNavigate && completed.length > 0 && (
+          <button onClick={() => onNavigate("log")} className="btn-primary" style={{ padding: "8px 14px", fontSize: 12 }}>
+            Log completed tasks
+          </button>
+        )}
       </div>
 
       <div className="tasks-grid">

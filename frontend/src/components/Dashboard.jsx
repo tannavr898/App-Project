@@ -254,12 +254,21 @@ export default function Dashboard({ username, onNavigate }) {
   const [selectedMode, setSelectedMode] = useState(() => localStorage.getItem(`pulse-plan-${username}`))
   const [pushStatus,   setPushStatus]   = useState("default")
   const [pushLoading,  setPushLoading]  = useState(false)
+  const [reminderPrefs, setReminderPrefs] = useState({
+    reminder_time: "20:30",
+    log_enabled: true,
+    task_enabled: true,
+    timezone: "local",
+  })
+  const [reminderSaving, setReminderSaving] = useState(false)
+  const [reminderMessage, setReminderMessage] = useState("")
   const [entries,      setEntries]      = useState([])
   const taskLoadSeqRef = useRef(0)
 
   const loadTasks = async (recommendedHours) => {
     const requestId = ++taskLoadSeqRef.current
-    const tasksRes = await apiFetch(`/tasks/${username}?recommended_hours=${recommendedHours}`, {
+    const today = new Date().toLocaleDateString("en-CA")
+    const tasksRes = await apiFetch(`/tasks/${username}?recommended_hours=${recommendedHours}&today=${today}`, {
       timeoutMs: 20000,
     })
     if (!tasksRes.ok) {
@@ -273,10 +282,22 @@ export default function Dashboard({ username, onNavigate }) {
   }
 
   useEffect(() => {
+    const handleTasksUpdated = event => {
+      if (event?.detail?.username && event.detail.username !== username) return
+      const mode = selectedMode || data?.recommended_mode || "comfortable"
+      const plan = data?.plans?.[mode] || data?.optimal_plan
+      loadTasks(plan?.study ?? 3.5).catch(() => {})
+    }
+    window.addEventListener("pulse:tasks-updated", handleTasksUpdated)
+    return () => window.removeEventListener("pulse:tasks-updated", handleTasksUpdated)
+  }, [username, selectedMode, data])
+
+  useEffect(() => {
     if (!cachedAnalysis) return
     const mode = selectedMode || cachedAnalysis.recommended_mode || "comfortable"
     const plan = cachedAnalysis.plans?.[mode] || cachedAnalysis.optimal_plan
     const recHours = plan?.study ?? 3.5
+    loadTasks(recHours).catch(() => {})
     const cachedEntries = getCachedJson(`entries:${username}`, 45000)
     if (cachedEntries) {
       setEntries(cachedEntries.entries || [])
@@ -316,6 +337,65 @@ export default function Dashboard({ username, onNavigate }) {
 
   useEffect(() => {
     let cancelled = false
+    apiFetch(`/reminders/${username}/preferences`, {
+      timeoutMs: 10000,
+      cacheKey: `reminders:${username}`,
+      cacheTtlMs: 60000,
+    })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => {
+        if (!cancelled && data) {
+          setReminderPrefs({
+            reminder_time: data.reminder_time || "20:30",
+            log_enabled: data.log_enabled !== false,
+            task_enabled: data.task_enabled !== false,
+            timezone: data.timezone || "local",
+          })
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [username])
+
+  const saveReminderPrefs = async (nextPrefs = reminderPrefs) => {
+    if (reminderSaving) return
+    setReminderSaving(true)
+    setReminderMessage("")
+    try {
+      const response = await apiFetch("/reminders/preferences", {
+        method: "POST",
+        timeoutMs: 10000,
+        body: JSON.stringify({
+          username,
+          reminder_time: nextPrefs.reminder_time || "20:30",
+          log_enabled: Boolean(nextPrefs.log_enabled),
+          task_enabled: Boolean(nextPrefs.task_enabled),
+          timezone: nextPrefs.timezone || "local",
+        }),
+      })
+      if (!response.ok) {
+        throw new Error(await response.text())
+      }
+      const saved = await response.json()
+      setReminderPrefs({
+        reminder_time: saved.reminder_time || "20:30",
+        log_enabled: saved.log_enabled !== false,
+        task_enabled: saved.task_enabled !== false,
+        timezone: saved.timezone || "local",
+      })
+      setReminderMessage("Saved")
+      setTimeout(() => setReminderMessage(""), 1800)
+    } catch (err) {
+      setReminderMessage(err?.message || "Could not save reminders")
+    } finally {
+      setReminderSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
 
     const loadData = async () => {
       let analysisStillProcessing = false
@@ -348,11 +428,18 @@ export default function Dashboard({ username, onNavigate }) {
           throw new Error('Analysis is still processing')
         }
 
-        const entriesPromise = apiFetch(`/users/${username}/entries`, {
+        apiFetch(`/users/${username}/entries`, {
           timeoutMs: 20000,
           cacheKey: `entries:${username}`,
           cacheTtlMs: 90000,
         })
+          .then(entriesRes => entriesRes.ok ? entriesRes.json() : { entries: [] })
+          .then(entriesData => {
+            if (!cancelled) {
+              setEntries(entriesData.entries || [])
+            }
+          })
+          .catch(() => {})
         const d = await fetchAnalysis()
         if (cancelled) return
         setData(d)
@@ -360,14 +447,7 @@ export default function Dashboard({ username, onNavigate }) {
         // Fetch tasks based on plan
         const recMode = d.recommended_mode || 'comfortable'
         const recPlan = d.plans?.[recMode] || d.optimal_plan
-        await loadTasks(recPlan?.study ?? 3.5)
-        if (cancelled) return
-
-        // Entries can load independently
-        const entriesRes = await entriesPromise
-        const entriesData = entriesRes.ok ? await entriesRes.json() : { entries: [] }
-        if (cancelled) return
-        setEntries(entriesData.entries || [])
+        loadTasks(recPlan?.study ?? 3.5).catch(() => {})
 
       } catch (e) {
         if (cancelled) return
@@ -506,6 +586,54 @@ export default function Dashboard({ username, onNavigate }) {
               </button>
             )}
           </div>
+        </div>
+      </div>
+
+      <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Reminder schedule</div>
+          <div style={{fontSize:11,color:"var(--faint)",marginTop:2}}>
+            Choose when Pulse checks in, and what it should remind you about.
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted)"}}>
+            Time
+            <input
+              type="time"
+              value={reminderPrefs.reminder_time}
+              onChange={event => setReminderPrefs(prev => ({ ...prev, reminder_time: event.target.value }))}
+              style={{border:"1px solid var(--border)",borderRadius:"999px",background:"var(--bg)",color:"var(--text)",padding:"6px 9px",fontFamily:"inherit",fontSize:12}}
+            />
+          </label>
+          <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted)",cursor:"pointer"}}>
+            <input
+              type="checkbox"
+              checked={reminderPrefs.log_enabled}
+              onChange={event => setReminderPrefs(prev => ({ ...prev, log_enabled: event.target.checked }))}
+            />
+            Log
+          </label>
+          <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted)",cursor:"pointer"}}>
+            <input
+              type="checkbox"
+              checked={reminderPrefs.task_enabled}
+              onChange={event => setReminderPrefs(prev => ({ ...prev, task_enabled: event.target.checked }))}
+            />
+            Tasks
+          </label>
+          <button
+            onClick={() => saveReminderPrefs()}
+            disabled={reminderSaving}
+            style={{fontSize:11,padding:"7px 12px",borderRadius:"999px",border:"1px solid var(--border)",background:reminderSaving?"var(--border)":"var(--green)",color:"white",cursor:reminderSaving?"not-allowed":"pointer",fontFamily:"inherit",fontWeight:600}}
+          >
+            {reminderSaving ? "Saving..." : "Save"}
+          </button>
+          {reminderMessage && (
+            <span style={{fontSize:11,color:reminderMessage === "Saved" ? "var(--green-txt)" : "var(--red-txt)"}}>
+              {reminderMessage}
+            </span>
+          )}
         </div>
       </div>
 

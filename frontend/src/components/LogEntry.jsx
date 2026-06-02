@@ -117,7 +117,7 @@ export default function LogEntry({ username, onSaved }) {
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.entries) setEntries(d.entries) })
       .catch(() => {})
-    apiFetch(`/tasks/${username}/prefill`)
+    apiFetch(`/tasks/${username}/prefill?today=${today}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d) {
@@ -127,7 +127,7 @@ export default function LogEntry({ username, onSaved }) {
         }
       })
       .catch(() => {})
-  }, [username])
+  }, [username, today])
 
   const totalHours = sleep + study + training
   const remaining  = 24 - totalHours
