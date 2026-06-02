@@ -68,11 +68,15 @@ function SectionTitle({ label, help }) {
 }
 
 function sceneClassForLevel(level) {
-  if (level <= 2) return "scene-seed"
-  if (level <= 4) return "scene-flower"
-  if (level <= 6) return "scene-woods"
-  if (level <= 8) return "scene-lake"
-  if (level <= 9) return "scene-river"
+  if (level <= 1) return "scene-seed"
+  if (level === 2) return "scene-sprout"
+  if (level === 3) return "scene-bud"
+  if (level === 4) return "scene-flower"
+  if (level === 5) return "scene-tree"
+  if (level === 6) return "scene-woods"
+  if (level === 7) return "scene-pond"
+  if (level === 8) return "scene-lake"
+  if (level === 9) return "scene-river"
   return "scene-rainforest"
 }
 
@@ -208,25 +212,37 @@ export default function Companion({ username, variant = "full", onNavigate }) {
     : (pulseMode === "perfect" ? "smooth long waves" : "steady with jumps")
 
   const renderStageArt = () => (
-    <div className={`companion-art companion-art--${pulseMode}`}>
+    <div className={`companion-art companion-art--${pulseMode} companion-art--${sceneClass}`}>
       <span className="companion-art-orbit companion-art-orbit--a" />
       <span className="companion-art-orbit companion-art-orbit--b" />
       <span className={`companion-energy companion-energy--${trendClass} companion-energy--${pulseMode}`} />
+      <span className="companion-sky companion-sky--sun" />
+      <span className="companion-cloud companion-cloud--1" />
+      <span className="companion-cloud companion-cloud--2" />
+      <span className="companion-river companion-river--main" />
+      <span className="companion-river companion-river--shine" />
+      <span className="companion-ripple companion-ripple--1" />
+      <span className="companion-ripple companion-ripple--2" />
+      <span className="companion-canopy companion-canopy--left" />
+      <span className="companion-canopy companion-canopy--right" />
       <span className="companion-art-petal companion-art-petal--1" />
       <span className="companion-art-petal companion-art-petal--2" />
       <span className="companion-art-petal companion-art-petal--3" />
-      <span className="companion-art-petal companion-art-petal--4" />
-      <span className="companion-art-petal companion-art-petal--5" />
-      <span className="companion-art-petal companion-art-petal--6" />
       <span className={`companion-art-core ${sceneClass}`}>
         <span className="companion-scene-ground" />
         <span className="companion-scene-tree companion-scene-tree--1" />
         <span className="companion-scene-tree companion-scene-tree--2" />
         <span className="companion-scene-tree companion-scene-tree--3" />
         <span className="companion-scene-water" />
+        <span className="companion-scene-bloom companion-scene-bloom--1" />
+        <span className="companion-scene-bloom companion-scene-bloom--2" />
       </span>
       <span className="companion-art-spark companion-art-spark--1" />
       <span className="companion-art-spark companion-art-spark--2" />
+      <span className="companion-art-spark companion-art-spark--3" />
+      <span className="companion-leaf companion-leaf--1" />
+      <span className="companion-leaf companion-leaf--2" />
+      <span className="companion-leaf companion-leaf--3" />
     </div>
   )
 
