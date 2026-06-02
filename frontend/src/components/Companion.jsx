@@ -41,6 +41,36 @@ const xpEventLabel = (eventName) => {
   return labels[eventName] || String(eventName || "XP event").replace(/_/g, " ")
 }
 
+const LEVEL_NAMES = [
+  "Seed",
+  "Sprout",
+  "Bud",
+  "Flower",
+  "Tree",
+  "Small woods",
+  "Forest pond",
+  "Forest lake",
+  "River",
+  "Amazon rainforest",
+]
+
+const LEVEL_THEMES = [
+  { background: "#F5EFE0", surface: "#FBF6EC", border: "#C8B89A", accent: "#8B6914", ink: "#3D2E08", muted: "#A07820" },
+  { background: "#EDF7DC", surface: "#F3FCE8", border: "#A3C46A", accent: "#5E8C2A", ink: "#2A4A10", muted: "#6B9A30" },
+  { background: "#FEF0F5", surface: "#FFF5F8", border: "#F4A8C0", accent: "#C04478", ink: "#7A1540", muted: "#D4527E" },
+  { background: "#FFF7ED", surface: "#FFFBF5", border: "#FDBA74", accent: "#C2620A", ink: "#7A3A00", muted: "#D97706" },
+  { background: "#EBF5DB", surface: "#F0F8E6", border: "#6B9A30", accent: "#3A6A10", ink: "#1A4000", muted: "#5A8A20" },
+  { background: "#E0F0D0", surface: "#EAF5DA", border: "#4A7A3A", accent: "#2A5A10", ink: "#183008", muted: "#3E7018" },
+  { background: "#D5EEF5", surface: "#E5F5F8", border: "#2A8A8A", accent: "#1A6A7A", ink: "#0A3A48", muted: "#2A8A9A" },
+  { background: "#C8E8F8", surface: "#E0F0FA", border: "#1A6AB0", accent: "#1A5A9A", ink: "#0A2A58", muted: "#2A7AC0" },
+  { background: "#B8D8F0", surface: "#D8EEF8", border: "#0E5A8A", accent: "#0A4878", ink: "#051838", muted: "#1A6898" },
+  { background: "#0A2010", surface: "#0E2A14", border: "#0A4020", accent: "#40B860", ink: "#B8F0C8", muted: "#60D080" },
+]
+
+const levelNameForLevel = (level) => LEVEL_NAMES[clamp(Math.round(level || 1), 1, LEVEL_NAMES.length) - 1]
+const levelThemeForLevel = (level) => LEVEL_THEMES[clamp(Math.round(level || 1), 1, LEVEL_THEMES.length) - 1]
+const levelLadderText = LEVEL_NAMES.join(" → ")
+
 function StatChip({ label, value }) {
   return (
     <div className="companion-chip">
@@ -195,6 +225,21 @@ export default function Companion({ username, variant = "full", onNavigate }) {
   const trendText = trendLabel(trend)
   const trendClass = trendTone(trend)
   const sceneClass = sceneClassForLevel(level)
+  const levelName = level_name || levelNameForLevel(level)
+  const nextLevelName = hasNextLevel ? levelNameForLevel(level + 1) : null
+  const levelTheme = levelThemeForLevel(level)
+  const levelStyle = {
+    "--companion-level-background": levelTheme.background,
+    "--companion-level-surface": levelTheme.surface,
+    "--companion-level-border": levelTheme.border,
+    "--companion-level-accent": levelTheme.accent,
+    "--companion-level-ink": levelTheme.ink,
+    "--companion-level-muted": levelTheme.muted,
+  }
+  const levelInsight = hasNextLevel
+    ? `${levelName} sits on level ${clamp(Math.round(level || 1), 1, 10)} of 10. Keep logging daily to grow toward ${nextLevelName}.`
+    : `${levelName} has reached the top of the ladder. Keep your streak steady so the ecosystem stays balanced.`
+  const levelLadderInsight = `Level ladder: ${levelLadderText}`
   const xpBreakdownRows = [
     { label: "Entries", value: xp_breakdown.entries || 0 },
     { label: "Tasks", value: xp_breakdown.tasks || 0 },
@@ -249,14 +294,28 @@ export default function Companion({ username, variant = "full", onNavigate }) {
   if (isSummary) {
     return (
       <div className="companion-container companion-shell companion-shell--summary companion-summary-dominant">
-        <div className="companion-stage companion-stage--summary-dominant">
-          <div className="companion-stage-glow" />
-          {renderStageArt()}
-          {onNavigate && (
-            <button className="companion-button companion-button--ghost companion-open-fab" onClick={() => onNavigate("companion")}>
-              Open
-            </button>
-          )}
+        <div className="companion-level-card companion-level-card--summary" style={levelStyle}>
+          <div className="companion-level-card__top">
+            <div className="companion-level-card__title-group">
+              <div className="companion-level-badge">LEVEL {level}</div>
+              <div className="companion-level-name">{levelName}</div>
+              <div className="companion-level-subtitle">{mood_emoji} {moodLabel}</div>
+            </div>
+            <div className="companion-level-pts">{xpLabel}</div>
+          </div>
+          <div className="companion-stage companion-stage--summary-dominant" style={levelStyle}>
+            <div className="companion-stage-glow" />
+            {renderStageArt()}
+            {onNavigate && (
+              <button className="companion-button companion-button--ghost companion-open-fab" onClick={() => onNavigate("companion")}>
+                Open
+              </button>
+            )}
+          </div>
+          <div className="companion-level-card__bottom">
+            <span>{levelInsight}</span>
+            <span>{levelLadderInsight}</span>
+          </div>
         </div>
         <div className="companion-progress-block companion-progress-block--summary-dominant">
           <div className="xp-bar-container">
@@ -274,7 +333,7 @@ export default function Companion({ username, variant = "full", onNavigate }) {
   return (
     <div className="companion-container companion-shell companion-shell--full">
       <div className="companion-full-layout">
-        <div className="companion-stage companion-stage--full companion-stage--full-left">
+        <div className="companion-stage companion-stage--full companion-stage--full-left" style={levelStyle}>
           <div className="companion-stage-glow" />
           {renderStageArt()}
         </div>
@@ -286,8 +345,20 @@ export default function Companion({ username, variant = "full", onNavigate }) {
                 Pulse companion
                 <HelpIcon text="This companion is a living summary of your streak, recovery, performance, and burnout trends." />
               </div>
-              <h2>{level_name}</h2>
-              <p>{mood_emoji} {moodLabel} · level {level}</p>
+              <div className="companion-level-card companion-level-card--inline" style={levelStyle}>
+                <div className="companion-level-card__top">
+                  <div className="companion-level-card__title-group">
+                    <div className="companion-level-badge">LEVEL {level}</div>
+                    <div className="companion-level-name">{levelName}</div>
+                    <div className="companion-level-subtitle">{mood_emoji} {moodLabel}</div>
+                  </div>
+                  <div className="companion-level-pts">{xpLabel}</div>
+                </div>
+                <div className="companion-level-card__bottom">
+                  <span>{levelInsight}</span>
+                  <span>{levelLadderInsight}</span>
+                </div>
+              </div>
 
               <div className="companion-summary-grid">
                 <StatChip label="Streak" value={`${streak} days`} />

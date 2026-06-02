@@ -58,6 +58,83 @@
   gap: 12px;
 }
 
+.companion-level-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid var(--companion-level-border, var(--border));
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--companion-level-border, var(--green)) 18%, transparent), transparent 40%),
+    linear-gradient(180deg, color-mix(in srgb, var(--companion-level-surface, var(--surface)) 96%, white), var(--companion-level-surface, var(--surface)));
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.06);
+}
+
+.companion-level-card--summary {
+  width: min(100%, 1040px);
+  margin: 0 auto;
+}
+
+.companion-level-card--inline {
+  padding: 12px 14px;
+  margin-top: 4px;
+}
+
+.companion-level-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.companion-level-card__title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.companion-level-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--companion-level-accent, var(--green-txt));
+}
+
+.companion-level-name {
+  font-size: 18px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--companion-level-ink, var(--text));
+}
+
+.companion-level-subtitle {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--companion-level-muted, var(--muted));
+}
+
+.companion-level-pts {
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--companion-level-border, var(--green)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--companion-level-border, var(--green)) 26%, transparent);
+  color: var(--companion-level-ink, var(--text));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.companion-level-card__bottom {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--companion-level-muted, var(--muted));
+}
+
 .companion-shell--full {
   padding: 0;
   background: transparent;
@@ -117,16 +194,18 @@
   place-items: center;
   overflow: hidden;
   background:
-    radial-gradient(circle at 18% 18%, rgba(52, 211, 153, 0.2), transparent 30%),
-    linear-gradient(180deg, rgba(223, 248, 236, 0.95), rgba(248, 250, 248, 0.66));
-  border: 1px solid rgba(16, 185, 129, 0.16);
-  box-shadow: 0 18px 60px rgba(16, 185, 129, 0.1);
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--companion-level-border, var(--green)) 26%, transparent), transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--companion-level-surface, #edf7dc) 96%, white), color-mix(in srgb, var(--companion-level-background, #f5efe0) 92%, white));
+  border: 1px solid color-mix(in srgb, var(--companion-level-border, var(--green)) 22%, var(--border));
+  box-shadow: 0 18px 60px color-mix(in srgb, var(--companion-level-border, var(--green)) 14%, transparent);
   animation: stage-rise 0.5s cubic-bezier(.2,.8,.2,1) both;
 }
 
 .companion-shell--full .companion-stage {
-  background: transparent;
-  border: 1px solid var(--border);
+  background:
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--companion-level-border, var(--green)) 18%, transparent), transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--companion-level-surface, #edf7dc) 96%, white), color-mix(in srgb, var(--companion-level-background, #f5efe0) 92%, white));
+  border: 1px solid color-mix(in srgb, var(--companion-level-border, var(--green)) 22%, var(--border));
 }
 
 .companion-stage--summary {
@@ -557,7 +636,7 @@
 
 .companion-stage-glow {
   inset: 16px;
-  background: radial-gradient(circle, rgba(55, 138, 221, 0.06), rgba(55, 138, 221, 0) 72%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--companion-level-border, var(--blue)) 10%, transparent), rgba(55, 138, 221, 0) 72%);
   animation: glow-breathe 3.8s ease-in-out infinite;
 }
 
@@ -1303,12 +1382,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .companion-stage,
-  .companion-art *,
-  .xp-bar-fill {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
+  .companion-container *,
+  .companion-container *::before,
+  .companion-container *::after {
     transition-duration: 0.001ms !important;
+  }
+
+  .companion-stage,
+  .companion-stage * {
+    animation: none !important;
   }
 }
 
